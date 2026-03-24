@@ -214,6 +214,7 @@ class HttpServerService {
       final pageSize = int.tryParse(params['page_size'] ?? '50') ?? 50;
       final startDate = int.tryParse(params['start_date'] ?? '');
       final endDate = int.tryParse(params['end_date'] ?? '');
+      final sortOrder = params['sort_order'] ?? 'desc';
 
       final result = await _database.getMediaItems(
         deviceId: deviceId,
@@ -222,6 +223,7 @@ class HttpServerService {
         pageSize: pageSize,
         startDate: startDate,
         endDate: endDate,
+        sortOrder: sortOrder,
       );
 
       final response = MediaListResponse(
@@ -355,15 +357,18 @@ class HttpServerService {
       final body = await _parseJson(request);
       final req = CheckExistsRequest.fromJson(body);
 
+      // Sanitize all fileNames before querying DB.
+      final safeFileNames = req.fileNames.map(_safeFileName).toList();
+
       final existing = await _database.getExistingFileNames(
         deviceId: req.deviceId,
         albumName: req.albumName,
-        fileNames: req.fileNames,
+        fileNames: safeFileNames,
       );
 
       final existingSet = existing.toSet();
       final notExists =
-          req.fileNames.where((f) => !existingSet.contains(f)).toList();
+          safeFileNames.where((f) => !existingSet.contains(f)).toList();
 
       return _ok(CheckExistsResponse(
         exists: existing,
@@ -378,14 +383,19 @@ class HttpServerService {
   // 5.9 Upload init
   // ---------------------------------------------------------------------------
 
+  /// Sanitizes a fileName so it can be safely used as a flat file name.
+  /// Replaces '/' and '\' with '_' to avoid accidental sub-directory creation.
+  String _safeFileName(String fileName) => fileName.replaceAll('/', '_').replaceAll('\\', '_');
+
   Future<Response> _uploadInit(Request request) async {
     try {
       final body = await _parseJson(request);
       final req = UploadInitRequest.fromJson(body);
+      final safeFileName = _safeFileName(req.fileName);
 
       final uploadedBytes = await _database.getUploadedBytes(
         deviceId: req.deviceId,
-        fileName: req.fileName,
+        fileName: safeFileName,
         albumName: req.albumName,
       );
 
@@ -393,18 +403,18 @@ class HttpServerService {
       final deviceDir =
           '$_storagePath${Platform.pathSeparator}${req.deviceId}';
       final tempPath =
-          '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_${req.fileName}';
+          '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_$safeFileName';
 
       await _database.upsertTransferTask(
         deviceId: req.deviceId,
-        fileName: req.fileName,
+        fileName: safeFileName,
         albumName: req.albumName,
         totalSize: req.totalSize,
         uploadedBytes: uploadedBytes,
         tempFilePath: tempPath,
         taskStatus: 'uploading',
         mediaType: req.mediaType,
-        livePhotoPairName: req.livePhotoPairName,
+        livePhotoPairName: req.livePhotoPairName != null ? _safeFileName(req.livePhotoPairName!) : null,
       );
 
       return _ok(UploadInitResponse(
@@ -435,18 +445,20 @@ class HttpServerService {
       final parts = _parseMultipart(bodyBytes, boundary);
 
       final deviceId = parts['device_id'];
-      final fileName = parts['file_name'];
+      final rawFileName = parts['file_name'];
       final albumName = parts['album_name'];
       final offsetStr = parts['offset'];
       final chunkBytes = parts['chunk_bytes'] as List<int>?;
 
       if (deviceId == null ||
-          fileName == null ||
+          rawFileName == null ||
           albumName == null ||
           offsetStr == null ||
           chunkBytes == null) {
         return _badRequest('Missing required fields');
       }
+
+      final fileName = _safeFileName(rawFileName);
 
       final offset = int.tryParse(offsetStr);
       if (offset == null) return _badRequest('Invalid offset');
@@ -491,11 +503,12 @@ class HttpServerService {
     try {
       final body = await _parseJson(request);
       final req = UploadCompleteRequest.fromJson(body);
+      final safeFileName = _safeFileName(req.fileName);
 
       final deviceDir =
           '$_storagePath${Platform.pathSeparator}${req.deviceId}';
       final tempPath =
-          '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_${req.fileName}';
+          '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_$safeFileName';
 
       final tempFile = File(tempPath);
       if (!await tempFile.exists()) {
@@ -518,15 +531,16 @@ class HttpServerService {
       // Move temp file to final location.
       final albumDir =
           '$deviceDir${Platform.pathSeparator}${req.albumName}';
-      await Directory(albumDir).create(recursive: true);
       final finalPath =
-          '$albumDir${Platform.pathSeparator}${req.fileName}';
+          '$albumDir${Platform.pathSeparator}$safeFileName';
+      // 创建所有中间目录（fileName 可能含子路径）
+      await File(finalPath).parent.create(recursive: true);
       await tempFile.rename(finalPath);
 
       // Insert media item (media_type will be resolved by DB layer from task).
       final mediaItem = await _database.insertMediaItem(
         deviceId: req.deviceId,
-        fileName: req.fileName,
+        fileName: safeFileName,
         albumName: req.albumName,
         filePath: finalPath,
         fileSize: req.totalSize,
@@ -536,7 +550,7 @@ class HttpServerService {
       // Mark transfer task complete.
       await _database.completeTransferTask(
         deviceId: req.deviceId,
-        fileName: req.fileName,
+        fileName: safeFileName,
         albumName: req.albumName,
       );
 
@@ -601,69 +615,73 @@ class HttpServerService {
     return match?.group(1);
   }
 
-  /// Minimal multipart parser.
+  /// Binary-safe multipart parser.
   ///
   /// Returns a map of field name → String value, plus a special key
   /// `chunk_bytes` → List<int> for the binary chunk field.
   Map<String, dynamic> _parseMultipart(List<int> body, String boundary) {
     final result = <String, dynamic>{};
-    final bodyStr = String.fromCharCodes(body);
+    final boundaryBytes = '--$boundary'.codeUnits;
+    final crlf = '\r\n'.codeUnits;
+    final crlfcrlf = '\r\n\r\n'.codeUnits;
 
-    // Split on boundary lines.
-    final parts = bodyStr.split('--$boundary');
-    for (final part in parts) {
-      if (part.trim().isEmpty || part.trim() == '--') continue;
+    // Find all boundary positions
+    final positions = <int>[];
+    for (var i = 0; i <= body.length - boundaryBytes.length; i++) {
+      if (_matchBytes(body, i, boundaryBytes)) {
+        positions.add(i);
+      }
+    }
 
-      // Find header/body separator (\r\n\r\n).
-      final sepIdx = part.indexOf('\r\n\r\n');
-      if (sepIdx == -1) continue;
+    for (var pi = 0; pi < positions.length; pi++) {
+      final partStart = positions[pi] + boundaryBytes.length;
+      // Skip the \r\n after boundary line
+      var cursor = partStart;
+      if (cursor + 1 < body.length &&
+          body[cursor] == 13 && body[cursor + 1] == 10) {
+        cursor += 2;
+      } else if (cursor < body.length && body[cursor] == 45) {
+        // '--' means final boundary
+        break;
+      } else {
+        continue;
+      }
 
-      final headers = part.substring(0, sepIdx);
-      // Body starts after \r\n\r\n, strip trailing \r\n.
-      final rawBody = part.substring(sepIdx + 4);
-      final bodyContent = rawBody.endsWith('\r\n')
-          ? rawBody.substring(0, rawBody.length - 2)
-          : rawBody;
+      // Find header/body separator \r\n\r\n
+      final headerEnd = _indexOfBytes(body, crlfcrlf, cursor);
+      if (headerEnd == -1) continue;
 
-      // Extract field name.
-      final nameMatch =
-          RegExp(r'name="([^"]+)"').firstMatch(headers);
+      final headerBytes = body.sublist(cursor, headerEnd);
+      final headers = String.fromCharCodes(headerBytes);
+
+      final bodyStart = headerEnd + 4;
+      // Body ends at next boundary (preceded by \r\n)
+      final bodyEnd = pi + 1 < positions.length
+          ? positions[pi + 1] - 2 // strip \r\n before boundary
+          : body.length;
+
+      if (bodyStart > bodyEnd) continue;
+
+      final nameMatch = RegExp(r'name="([^"]+)"').firstMatch(headers);
       if (nameMatch == null) continue;
       final name = nameMatch.group(1)!;
 
       if (name == 'chunk') {
-        // Binary field — re-extract from raw bytes.
-        // Find this part's byte range in the original body.
-        final partStart = _indexOfBytes(
-          body,
-          'name="chunk"'.codeUnits,
-          0,
-        );
-        if (partStart != -1) {
-          final headerEnd = _indexOfBytes(
-            body,
-            '\r\n\r\n'.codeUnits,
-            partStart,
-          );
-          if (headerEnd != -1) {
-            final chunkStart = headerEnd + 4;
-            final chunkEnd = _indexOfBytes(
-              body,
-              '\r\n--$boundary'.codeUnits,
-              chunkStart,
-            );
-            if (chunkEnd != -1) {
-              result['chunk_bytes'] =
-                  body.sublist(chunkStart, chunkEnd);
-            }
-          }
-        }
+        result['chunk_bytes'] = body.sublist(bodyStart, bodyEnd);
       } else {
-        result[name] = bodyContent;
+        result[name] = String.fromCharCodes(body.sublist(bodyStart, bodyEnd));
       }
     }
 
     return result;
+  }
+
+  bool _matchBytes(List<int> haystack, int start, List<int> needle) {
+    if (start + needle.length > haystack.length) return false;
+    for (var i = 0; i < needle.length; i++) {
+      if (haystack[start + i] != needle[i]) return false;
+    }
+    return true;
   }
 
   int _indexOfBytes(List<int> haystack, List<int> needle, int start) {

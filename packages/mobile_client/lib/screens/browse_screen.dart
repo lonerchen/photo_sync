@@ -328,7 +328,7 @@ class _NotConnectedPageState extends State<_NotConnectedPage> {
                   hintText: l.serverIpHint,
                   border: const OutlineInputBorder(),
                 ),
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 enabled: !_connecting,
               ),
               const SizedBox(height: 12),
@@ -569,9 +569,27 @@ class _MediaPanel extends StatelessWidget {
     if (!mediaProvider.isLoading && mediaProvider.items.isEmpty) {
       return Column(
         children: [
-          DateRangePicker(
-            onChanged: (range) =>
-                context.read<MediaListProvider>().applyFilter(range),
+          Row(
+            children: [
+              Expanded(
+                child: DateRangePicker(
+                  onChanged: (range) =>
+                      context.read<MediaListProvider>().applyFilter(range),
+                ),
+              ),
+              Consumer<MediaListProvider>(
+                builder: (context, provider, _) => IconButton(
+                  icon: Icon(
+                    provider.sortOrder == 'desc'
+                        ? Icons.arrow_downward
+                        : Icons.arrow_upward,
+                  ),
+                  tooltip: provider.sortOrder == 'desc' ? '最新在前' : '最旧在前',
+                  onPressed: () =>
+                      context.read<MediaListProvider>().toggleSortOrder(),
+                ),
+              ),
+            ],
           ),
           Expanded(
             child: Center(child: Text(AppLocalizations.of(context).noPhotosInAlbum)),
@@ -582,9 +600,28 @@ class _MediaPanel extends StatelessWidget {
 
     return Column(
       children: [
-        DateRangePicker(
-          onChanged: (range) =>
-              context.read<MediaListProvider>().applyFilter(range),
+        Row(
+          children: [
+            Expanded(
+              child: DateRangePicker(
+                onChanged: (range) =>
+                    context.read<MediaListProvider>().applyFilter(range),
+              ),
+            ),
+            // 排序按钮
+            Consumer<MediaListProvider>(
+              builder: (context, provider, _) => IconButton(
+                icon: Icon(
+                  provider.sortOrder == 'desc'
+                      ? Icons.arrow_downward
+                      : Icons.arrow_upward,
+                ),
+                tooltip: provider.sortOrder == 'desc' ? '最新在前' : '最旧在前',
+                onPressed: () =>
+                    context.read<MediaListProvider>().toggleSortOrder(),
+              ),
+            ),
+          ],
         ),
         Expanded(
           child: Consumer<RestoreProvider>(

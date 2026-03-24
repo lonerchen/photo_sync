@@ -68,6 +68,8 @@ class MainNavigation extends StatefulWidget {
 
 class _MainNavigationState extends State<MainNavigation> {
   int _index = 0;
+  // Track which screens have been visited to enable lazy init
+  final Set<int> _visited = {0};
 
   @override
   Widget build(BuildContext context) {
@@ -80,10 +82,21 @@ class _MainNavigationState extends State<MainNavigation> {
     ];
 
     return Scaffold(
-      body: IndexedStack(index: _index, children: screens),
+      body: IndexedStack(
+        index: _index,
+        children: List.generate(screens.length, (i) {
+          if (!_visited.contains(i)) {
+            return const SizedBox.shrink();
+          }
+          return screens[i];
+        }),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: (i) => setState(() {
+          _index = i;
+          _visited.add(i);
+        }),
         destinations: [
           NavigationDestination(
             icon: const Icon(Icons.photo_library_outlined),

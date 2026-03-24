@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/media_item.dart';
@@ -41,7 +42,7 @@ class UploadQueueManager {
   final String deviceId;
 
   /// Returns the local file path for a given [UploadTask].
-  final String Function(UploadTask task) resolveFilePath;
+  final Future<String> Function(UploadTask task) resolveFilePath;
 
   final http.Client _client;
 
@@ -131,12 +132,24 @@ class UploadQueueManager {
     _notify();
   }
 
-  void _startWorker(UploadTask task) {
+  Future<void> _startWorker(UploadTask task) async {
     int _lastReported = 0;
+    // 先占位，防止 await resolveFilePath 期间并发超限
+    _activeWorkers[task] = UploadWorker(
+      baseUrl: baseUrl,
+      deviceId: deviceId,
+      filePath: '',
+      task: task,
+      onProgress: (_a, _b) {},
+      client: _client,
+    );
+    debugPrint('[Queue] resolving filePath for ${task.fileName}');
+    final filePath = await resolveFilePath(task);
+    debugPrint('[Queue] resolved filePath="${filePath}" for ${task.fileName}');
     final worker = UploadWorker(
       baseUrl: baseUrl,
       deviceId: deviceId,
-      filePath: resolveFilePath(task),
+      filePath: filePath,
       task: task,
       onProgress: (uploaded, total) {
         final delta = uploaded - _lastReported;
@@ -168,6 +181,7 @@ class UploadQueueManager {
   }
 
   void _onWorkerError(UploadTask task, Object error) {
+    debugPrint('[Queue] worker error for ${task.fileName}: $error');
     _activeWorkers.remove(task);
     completedTasks.add(
       task.copyWith(

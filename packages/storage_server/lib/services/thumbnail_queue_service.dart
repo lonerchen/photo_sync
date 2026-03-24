@@ -130,30 +130,48 @@ Future<void> _resizeAndCrop(String filePath, String outPath) async {
 
 /// Generates a 300×300 JPEG thumbnail from the first frame of a video.
 ///
-/// Uses ffmpeg via a shell command (ffmpeg_kit_flutter is Flutter-only and
-/// cannot run inside a plain Dart isolate, so we shell out to the system
-/// ffmpeg binary which is available on desktop targets).
+/// Strategy:
+/// 1. Try `ffmpeg` (cross-platform, needs to be installed).
+/// 2. Fallback to `qlmanage -t` (macOS Quick Look, no extra install needed).
+/// 3. If both fail, throw so the caller can mark status as 'failed'.
 Future<void> _generateVideoThumbnail(String filePath, String outPath) async {
-  // Extract first frame to a temp PNG, then crop/resize with the image package.
+  // --- Attempt 1: ffmpeg ---
   final tempPng = '${outPath}_frame.png';
   try {
     final result = await Process.run('ffmpeg', [
-      '-y',
-      '-i', filePath,
-      '-vframes', '1',
-      '-q:v', '2',
-      tempPng,
+      '-y', '-i', filePath, '-vframes', '1', '-q:v', '2', tempPng,
     ]);
-
-    if (result.exitCode != 0) {
-      throw Exception('ffmpeg failed: ${result.stderr}');
+    if (result.exitCode == 0 && await File(tempPng).exists()) {
+      await _generateImageThumbnail(tempPng, outPath);
+      return;
     }
-
-    await _generateImageThumbnail(tempPng, outPath);
+  } catch (_) {
+    // ffmpeg not installed or failed — try fallback
   } finally {
     final tmp = File(tempPng);
     if (await tmp.exists()) await tmp.delete();
   }
+
+  // --- Attempt 2: qlmanage (macOS Quick Look) ---
+  final qlDir = p.dirname(outPath);
+  try {
+    final result = await Process.run('qlmanage', [
+      '-t', '-s', '300', '-o', qlDir, filePath,
+    ]);
+    if (result.exitCode == 0) {
+      // qlmanage outputs "<filename>.png" in qlDir
+      final qlOut = p.join(qlDir, '${p.basename(filePath)}.png');
+      if (await File(qlOut).exists()) {
+        await _generateImageThumbnail(qlOut, outPath);
+        await File(qlOut).delete();
+        return;
+      }
+    }
+  } catch (_) {
+    // qlmanage not available (non-macOS)
+  }
+
+  throw Exception('No video thumbnail tool available for: $filePath');
 }
 
 // ---------------------------------------------------------------------------

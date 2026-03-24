@@ -53,7 +53,7 @@ class MediaItemsDao {
     return _rowToMediaItem(rows.first);
   }
 
-  /// Paginated query with optional time-range filter.
+  /// Paginated query with optional time-range filter and sort order.
   Future<({int total, List<MediaItem> items})> getMediaItems({
     required String deviceId,
     required String albumName,
@@ -61,6 +61,7 @@ class MediaItemsDao {
     required int pageSize,
     int? startDate,
     int? endDate,
+    String sortOrder = 'desc',
   }) async {
     final where = StringBuffer('device_id = ? AND album_name = ?');
     final args = <dynamic>[deviceId, albumName];
@@ -75,6 +76,7 @@ class MediaItemsDao {
     }
 
     final whereStr = where.toString();
+    final order = sortOrder == 'asc' ? 'ASC' : 'DESC';
 
     // Count total matching rows.
     final countResult = await _db.rawQuery(
@@ -89,7 +91,7 @@ class MediaItemsDao {
       'media_items',
       where: whereStr,
       whereArgs: args,
-      orderBy: 'taken_at DESC',
+      orderBy: 'taken_at $order',
       limit: pageSize,
       offset: offset,
     );

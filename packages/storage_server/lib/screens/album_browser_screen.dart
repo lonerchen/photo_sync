@@ -180,9 +180,27 @@ class _RightPanel extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleMedium,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  DateRangePicker(
-                    onChanged: (range) =>
-                        context.read<MediaListProvider>().applyFilter(range),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DateRangePicker(
+                          onChanged: (range) =>
+                              context.read<MediaListProvider>().applyFilter(range),
+                        ),
+                      ),
+                      Consumer<MediaListProvider>(
+                        builder: (context, provider, _) => IconButton(
+                          icon: Icon(
+                            provider.sortOrder == 'desc'
+                                ? Icons.arrow_downward
+                                : Icons.arrow_upward,
+                          ),
+                          tooltip: provider.sortOrder == 'desc' ? '最新在前' : '最旧在前',
+                          onPressed: () =>
+                              context.read<MediaListProvider>().toggleSortOrder(),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),

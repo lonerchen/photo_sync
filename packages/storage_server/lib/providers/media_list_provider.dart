@@ -17,6 +17,7 @@ class MediaListProvider extends ChangeNotifier {
   bool _isLoading = false;
   int _currentPage = 1;
   DateTimeRange? _dateFilter;
+  String _sortOrder = 'desc';
 
   String? _deviceId;
   String? _albumName;
@@ -25,6 +26,7 @@ class MediaListProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
   DateTimeRange? get dateFilter => _dateFilter;
+  String get sortOrder => _sortOrder;
 
   Future<void> load({required String deviceId, required String albumName}) async {
     _deviceId = deviceId;
@@ -52,6 +54,11 @@ class MediaListProvider extends ChangeNotifier {
     refresh();
   }
 
+  void toggleSortOrder() {
+    _sortOrder = _sortOrder == 'desc' ? 'asc' : 'desc';
+    refresh();
+  }
+
   Future<void> _fetch({bool append = false}) async {
     if (_deviceId == null || _albumName == null) return;
     _isLoading = true;
@@ -64,6 +71,7 @@ class MediaListProvider extends ChangeNotifier {
         pageSize: _pageSize,
         startDate: _dateFilter?.start.millisecondsSinceEpoch,
         endDate: _dateFilter?.end.millisecondsSinceEpoch,
+        sortOrder: _sortOrder,
       );
       if (append) {
         _items = [..._items, ...result.items];

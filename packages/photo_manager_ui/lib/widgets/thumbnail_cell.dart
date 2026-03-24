@@ -71,7 +71,11 @@ class ThumbnailCell extends StatelessWidget {
     return Container(
       color: Colors.grey[200],
       child: Icon(
-        broken ? Icons.broken_image : Icons.image,
+        broken
+            ? Icons.broken_image
+            : (mediaType == MediaType.video
+                ? Icons.videocam
+                : Icons.image),
         color: Colors.grey,
       ),
     );

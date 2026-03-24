@@ -1,16 +1,16 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:common/common.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 
-/// Full-screen media viewer with gesture zoom/pan via [PhotoView].
+/// Full-screen media viewer.
 ///
-/// - Loads the original image from `$serverBaseUrl/api/v1/media/${item.id}/original`
-/// - Shows a LIVE badge for Live Photos
-/// - Shows loading indicator while the image loads
-/// - Shows an error state on failure
-/// - Has a close button (×) in the top-right corner
-/// - Shows file name and taken_at in a bottom overlay
+/// - Images / Live Photos: gesture zoom/pan via [PhotoView]
+/// - Videos: shows thumbnail + play button; tapping opens the video in the
+///   system default player via [Process.run] (desktop) or shows a message
+///   (mobile — video playback not supported in-app on mobile yet).
 class MediaViewer extends StatelessWidget {
   const MediaViewer({
     super.key,
@@ -24,7 +24,9 @@ class MediaViewer extends StatelessWidget {
   String get _originalUrl =>
       '$serverBaseUrl/api/v1/media/${item.id}/original';
 
-  /// Push this viewer as a full-screen route.
+  String get _thumbnailUrl =>
+      '$serverBaseUrl/api/v1/media/${item.id}/thumbnail';
+
   static Future<void> show(
     BuildContext context, {
     required MediaItem item,
@@ -44,14 +46,93 @@ class MediaViewer extends StatelessWidget {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          _buildPhotoView(),
+          item.mediaType == MediaType.video
+              ? _buildVideoPlaceholder(context)
+              : _buildPhotoView(),
           _buildCloseButton(context),
-          _buildBottomOverlay(context),
+          _buildBottomOverlay(),
           if (item.mediaType == MediaType.livePhoto) _buildLiveBadge(),
         ],
       ),
     );
   }
+
+  // ── Video ──────────────────────────────────────────────────────────────────
+
+  Widget _buildVideoPlaceholder(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _openVideoInSystemPlayer(context),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          // Show thumbnail as background if available
+          CachedNetworkImage(
+            imageUrl: _thumbnailUrl,
+            fit: BoxFit.contain,
+            errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black),
+          ),
+          // Dark overlay
+          Container(color: Colors.black54),
+          // Play button
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.white24,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white54, width: 2),
+                  ),
+                  child: const Icon(
+                    Icons.play_arrow,
+                    color: Colors.white,
+                    size: 48,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  '点击用系统播放器打开',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openVideoInSystemPlayer(BuildContext context) async {
+    // On desktop, download URL is accessible via localhost.
+    // Use platform-specific open command.
+    try {
+      if (Platform.isWindows) {
+        await Process.run('cmd', ['/c', 'start', '', _originalUrl]);
+      } else if (Platform.isMacOS) {
+        await Process.run('open', [_originalUrl]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [_originalUrl]);
+      } else {
+        // Mobile: show snackbar
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('移动端暂不支持视频播放')),
+          );
+        }
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('无法打开系统播放器')),
+        );
+      }
+    }
+  }
+
+  // ── Image ──────────────────────────────────────────────────────────────────
 
   Widget _buildPhotoView() {
     return PhotoView(
@@ -59,24 +140,23 @@ class MediaViewer extends StatelessWidget {
       minScale: PhotoViewComputedScale.contained,
       maxScale: PhotoViewComputedScale.covered * 4,
       backgroundDecoration: const BoxDecoration(color: Colors.black),
-      loadingBuilder: (_, __) => const Center(
-        child: CircularProgressIndicator(color: Colors.white),
-      ),
+      loadingBuilder: (_, __) =>
+          const Center(child: CircularProgressIndicator(color: Colors.white)),
       errorBuilder: (_, __, ___) => Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: const [
             Icon(Icons.broken_image, color: Colors.white54, size: 64),
             SizedBox(height: 12),
-            Text(
-              'Failed to load image',
-              style: TextStyle(color: Colors.white54),
-            ),
+            Text('Failed to load image',
+                style: TextStyle(color: Colors.white54)),
           ],
         ),
       ),
     );
   }
+
+  // ── Common overlays ────────────────────────────────────────────────────────
 
   Widget _buildCloseButton(BuildContext context) {
     return SafeArea(
@@ -86,9 +166,7 @@ class MediaViewer extends StatelessWidget {
           padding: const EdgeInsets.all(8),
           child: IconButton(
             icon: const Icon(Icons.close, color: Colors.white),
-            style: IconButton.styleFrom(
-              backgroundColor: Colors.black45,
-            ),
+            style: IconButton.styleFrom(backgroundColor: Colors.black45),
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Close',
           ),
@@ -97,7 +175,7 @@ class MediaViewer extends StatelessWidget {
     );
   }
 
-  Widget _buildBottomOverlay(BuildContext context) {
+  Widget _buildBottomOverlay() {
     final takenAt = item.takenAt != null
         ? DateTime.fromMillisecondsSinceEpoch(item.takenAt!)
             .toString()
@@ -126,18 +204,16 @@ class MediaViewer extends StatelessWidget {
               Text(
                 item.fileName,
                 style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500),
                 overflow: TextOverflow.ellipsis,
               ),
               if (takenAt != null) ...[
                 const SizedBox(height: 2),
-                Text(
-                  takenAt,
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
-                ),
+                Text(takenAt,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)),
               ],
             ],
           ),
@@ -161,11 +237,10 @@ class MediaViewer extends StatelessWidget {
             child: const Text(
               'LIVE',
               style: TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 0.8,
-              ),
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.8),
             ),
           ),
         ),

@@ -293,6 +293,7 @@ class ServerDatabase implements IServerDatabase {
     required int pageSize,
     int? startDate,
     int? endDate,
+    String sortOrder = 'desc',
   }) {
     _assertOpen();
     return _mediaItemsDao.getMediaItems(
@@ -302,6 +303,7 @@ class ServerDatabase implements IServerDatabase {
       pageSize: pageSize,
       startDate: startDate,
       endDate: endDate,
+      sortOrder: sortOrder,
     );
   }
 

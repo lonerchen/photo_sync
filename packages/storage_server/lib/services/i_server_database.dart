@@ -39,6 +39,7 @@ abstract interface class IServerDatabase {
   /// Returns a paginated list of media items for [deviceId] / [albumName].
   ///
   /// [startDate] and [endDate] are optional Unix-ms timestamps.
+  /// [sortOrder] is either 'desc' (default, newest first) or 'asc'.
   Future<({int total, List<MediaItem> items})> getMediaItems({
     required String deviceId,
     required String albumName,
@@ -46,6 +47,7 @@ abstract interface class IServerDatabase {
     required int pageSize,
     int? startDate,
     int? endDate,
+    String sortOrder,
   });
 
   /// Returns the [MediaItem] with [mediaId], or null if not found.

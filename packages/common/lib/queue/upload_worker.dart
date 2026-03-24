@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/upload_task.dart';
@@ -41,15 +42,18 @@ class UploadWorker {
 
   /// Runs the upload. Returns the final [UploadTask] with updated status.
   Future<UploadTask> run() async {
+    debugPrint('[Worker] start: ${task.fileName}, filePath=$filePath');
     // Resolve actual file size before anything else.
     final file = File(filePath);
     if (!await file.exists()) {
+      debugPrint('[Worker] file not found: $filePath');
       return task.copyWith(
         taskStatus: TaskStatus.failed,
         updatedAt: DateTime.now().millisecondsSinceEpoch,
       );
     }
     final totalSize = await file.length();
+    debugPrint('[Worker] file size: $totalSize bytes for ${task.fileName}');
 
     // Step 1: init – get resume offset from server
     final initReq = UploadInitRequest(
@@ -61,16 +65,20 @@ class UploadWorker {
       livePhotoPairName: task.livePhotoPairName,
     );
 
+    debugPrint('[Worker] calling init for ${task.fileName}');
     final initResp = await _retryRequest(() => _postInit(initReq));
     int offset = initResp.uploadedBytes;
+    debugPrint('[Worker] init ok, resume offset=$offset for ${task.fileName}');
 
     // Step 2: upload chunks
     final raf = await file.open(mode: FileMode.read);
+    int chunkIndex = 0;
     try {
       await raf.setPosition(offset);
 
       while (offset < totalSize) {
         if (_paused) {
+          debugPrint('[Worker] paused at offset=$offset for ${task.fileName}');
           return task.copyWith(
             uploadedBytes: offset,
             taskStatus: TaskStatus.paused,
@@ -82,15 +90,19 @@ class UploadWorker {
         final toRead = remaining < chunkSize ? remaining : chunkSize;
         final chunk = await raf.read(toRead);
 
+        debugPrint('[Worker] chunk #$chunkIndex offset=$offset size=${chunk.length} for ${task.fileName}');
         await _retryRequest(() => _postChunk(offset, chunk));
 
         offset += chunk.length;
+        chunkIndex++;
         onProgress?.call(offset, totalSize);
+        debugPrint('[Worker] progress $offset/$totalSize for ${task.fileName}');
       }
     } finally {
       await raf.close();
     }
 
+    debugPrint('[Worker] all chunks done, calling complete for ${task.fileName}');
     // Step 3: complete
     final completeReq = UploadCompleteRequest(
       deviceId: deviceId,
@@ -100,6 +112,7 @@ class UploadWorker {
     );
     await _retryRequest(() => _postComplete(completeReq));
 
+    debugPrint('[Worker] complete ok for ${task.fileName}');
     _completed = true;
     return task.copyWith(
       uploadedBytes: totalSize,
@@ -119,6 +132,7 @@ class UploadWorker {
         return await fn();
       } catch (e) {
         attempts++;
+        debugPrint('[Worker] request failed (attempt $attempts/$maxRetries): $e for ${task.fileName}');
         if (attempts >= maxRetries) rethrow;
         await Future.delayed(Duration(seconds: attempts));
       }

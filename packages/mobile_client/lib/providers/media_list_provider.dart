@@ -13,6 +13,7 @@ class MediaListProvider extends ChangeNotifier {
   bool _hasMore = false;
   bool _isLoading = false;
   DateTimeRange? _dateFilter;
+  String _sortOrder = 'desc'; // 'desc' = 最新在前, 'asc' = 最旧在前
   int _currentPage = 1;
   int _total = 0;
 
@@ -24,6 +25,7 @@ class MediaListProvider extends ChangeNotifier {
   bool get hasMore => _hasMore;
   bool get isLoading => _isLoading;
   DateTimeRange? get dateFilter => _dateFilter;
+  String get sortOrder => _sortOrder;
 
   /// Loads the first page of media for the given album.
   Future<void> load(String baseUrl, String deviceId, String albumName) async {
@@ -46,6 +48,37 @@ class MediaListProvider extends ChangeNotifier {
   /// Applies a date filter and reloads from page 1.
   void applyFilter(DateTimeRange? range) {
     _dateFilter = range;
+    if (_baseUrl != null && _deviceId != null && _albumName != null) {
+      _currentPage = 1;
+      _items = [];
+      _total = 0;
+      _fetch();
+    }
+  }
+
+  /// Toggles sort order between 'desc' and 'asc', then reloads.
+  void toggleSortOrder() {
+    _sortOrder = _sortOrder == 'desc' ? 'asc' : 'desc';
+    // 先对已加载的数据做内存排序，立即响应
+    if (_items.isNotEmpty) {
+      _items = List.of(_items)
+        ..sort((a, b) {
+          final ta = a.takenAt ?? 0;
+          final tb = b.takenAt ?? 0;
+          return _sortOrder == 'asc' ? ta.compareTo(tb) : tb.compareTo(ta);
+        });
+    }
+    notifyListeners(); // 立即更新 UI
+    // 同时从服务端重新拉取（保证分页数据也是正确顺序）
+    if (_baseUrl != null && _deviceId != null && _albumName != null) {
+      _currentPage = 1;
+      _total = 0;
+      _fetch();
+    }
+  }
+
+  /// Reloads the current album from page 1 (e.g. after a new upload).
+  void reload() {
     if (_baseUrl != null && _deviceId != null && _albumName != null) {
       _currentPage = 1;
       _items = [];
@@ -101,6 +134,7 @@ class MediaListProvider extends ChangeNotifier {
       final queryParams = <String, String>{
         'page': '$_currentPage',
         'page_size': '$_pageSize',
+        'sort_order': _sortOrder,
       };
       if (_dateFilter != null) {
         queryParams['start_date'] =
@@ -124,17 +158,25 @@ class MediaListProvider extends ChangeNotifier {
         );
         final result = apiResponse.data;
         if (result != null) {
+          List<MediaItem> newItems = result.items;
+          // 客户端兜底排序，防止服务端未更新时顺序不对
+          newItems.sort((a, b) {
+            final ta = a.takenAt ?? 0;
+            final tb = b.takenAt ?? 0;
+            return _sortOrder == 'asc' ? ta.compareTo(tb) : tb.compareTo(ta);
+          });
           if (append) {
-            _items = [..._items, ...result.items];
+            _items = [..._items, ...newItems];
           } else {
-            _items = result.items;
+            _items = newItems;
           }
           _total = result.total;
           _hasMore = _items.length < _total;
         }
       }
-    } catch (_) {
+    } catch (e) {
       // Keep existing items on error; hasMore stays as-is.
+      debugPrint('[MediaListProvider] _fetch error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();

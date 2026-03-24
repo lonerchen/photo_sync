@@ -11,8 +11,7 @@ enum ViewMode { grid, list }
 /// - Mobile / narrow: 3 columns
 /// - Desktop / wide: 5–8 columns adaptive (based on window width)
 /// - Triggers [onLoadMore] when the user scrolls near the bottom.
-/// - Calls [onVisibleIdsChanged] with the currently visible media IDs so the
-///   caller can send `thumbnail_priority` events.
+/// - Right-side time scrubber for fast navigation.
 class MediaGridView extends StatefulWidget {
   const MediaGridView({
     super.key,
@@ -36,11 +35,7 @@ class MediaGridView extends StatefulWidget {
   final ValueChanged<MediaItem>? onItemTap;
   final ValueChanged<MediaItem>? onItemLongPress;
   final ValueChanged<List<int>>? onVisibleIdsChanged;
-
-  /// Base URL used to build thumbnail URLs, e.g. `http://192.168.1.1:8765`.
   final String serverBaseUrl;
-
-  /// IDs of currently selected items (for restore/multi-select mode).
   final Set<int> selectedIds;
 
   @override
@@ -49,6 +44,11 @@ class MediaGridView extends StatefulWidget {
 
 class _MediaGridViewState extends State<MediaGridView> {
   final _scrollController = ScrollController();
+
+  // Scrubber drag state
+  bool _scrubbing = false;
+  double _scrubFraction = 0.0; // 0.0 = top, 1.0 = bottom
+  String? _scrubLabel;
 
   @override
   void initState() {
@@ -66,6 +66,12 @@ class _MediaGridViewState extends State<MediaGridView> {
     final pos = _scrollController.position;
     if (pos.pixels >= pos.maxScrollExtent - 300 && widget.hasMore) {
       widget.onLoadMore();
+    }
+    // Keep scrub fraction in sync when user scrolls manually
+    if (!_scrubbing && pos.maxScrollExtent > 0) {
+      setState(() {
+        _scrubFraction = (pos.pixels / pos.maxScrollExtent).clamp(0.0, 1.0);
+      });
     }
   }
 
@@ -93,6 +99,53 @@ class _MediaGridViewState extends State<MediaGridView> {
     return null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Scrubber helpers
+  // ---------------------------------------------------------------------------
+
+  /// Returns a label for the item at [fraction] position in the list.
+  String _labelAt(double fraction) {
+    if (widget.items.isEmpty) return '';
+    final index = (fraction * (widget.items.length - 1)).round().clamp(0, widget.items.length - 1);
+    final item = widget.items[index];
+    if (item.takenAt != null) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(item.takenAt!);
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}';
+    }
+    return '';
+  }
+
+  void _onScrubStart(double localY, double trackHeight) {
+    _scrubbing = true;
+    _updateScrub(localY, trackHeight);
+  }
+
+  void _onScrubUpdate(double localY, double trackHeight) {
+    _updateScrub(localY, trackHeight);
+  }
+
+  void _onScrubEnd() {
+    setState(() => _scrubbing = false);
+  }
+
+  void _updateScrub(double localY, double trackHeight) {
+    final fraction = (localY / trackHeight).clamp(0.0, 1.0);
+    setState(() {
+      _scrubFraction = fraction;
+      _scrubLabel = _labelAt(fraction);
+    });
+
+    // Jump scroll position
+    final pos = _scrollController.position;
+    if (pos.maxScrollExtent > 0) {
+      _scrollController.jumpTo(fraction * pos.maxScrollExtent);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Build
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -101,16 +154,31 @@ class _MediaGridViewState extends State<MediaGridView> {
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
-              if (widget.viewMode == ViewMode.list) {
-                return _buildListView();
-              }
-              return _buildGridView(constraints.maxWidth);
+              final content = widget.viewMode == ViewMode.list
+                  ? _buildListView()
+                  : _buildGridView(constraints.maxWidth - _scrubberWidth);
+              return Row(
+                children: [
+                  Expanded(child: content),
+                  if (widget.items.isNotEmpty)
+                    _TimeScrubber(
+                      width: _scrubberWidth,
+                      fraction: _scrubFraction,
+                      label: _scrubbing ? _scrubLabel : null,
+                      onDragStart: (y, h) => _onScrubStart(y, h),
+                      onDragUpdate: (y, h) => _onScrubUpdate(y, h),
+                      onDragEnd: _onScrubEnd,
+                    ),
+                ],
+              );
             },
           ),
         ),
       ],
     );
   }
+
+  static const double _scrubberWidth = 28.0;
 
   Widget _buildToolbar() {
     return Padding(
@@ -199,13 +267,110 @@ class _MediaGridViewState extends State<MediaGridView> {
           title: Text(item.fileName, overflow: TextOverflow.ellipsis),
           subtitle: Text(
             item.takenAt != null
-                ? DateTime.fromMillisecondsSinceEpoch(item.takenAt!).toString().substring(0, 16)
+                ? DateTime.fromMillisecondsSinceEpoch(item.takenAt!)
+                    .toString()
+                    .substring(0, 16)
                 : item.albumName,
           ),
           onTap: () => widget.onItemTap?.call(item),
           onLongPress: () => widget.onItemLongPress?.call(item),
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Time scrubber widget
+// ---------------------------------------------------------------------------
+
+class _TimeScrubber extends StatelessWidget {
+  const _TimeScrubber({
+    required this.width,
+    required this.fraction,
+    required this.label,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+  });
+
+  final double width;
+  final double fraction;
+  final String? label; // shown while dragging
+  final void Function(double localY, double trackHeight) onDragStart;
+  final void Function(double localY, double trackHeight) onDragUpdate;
+  final VoidCallback onDragEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: width,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final trackHeight = constraints.maxHeight;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: (d) =>
+                onDragStart(d.localPosition.dy, trackHeight),
+            onVerticalDragUpdate: (d) =>
+                onDragUpdate(d.localPosition.dy, trackHeight),
+            onVerticalDragEnd: (_) => onDragEnd(),
+            onTapDown: (d) {
+              onDragStart(d.localPosition.dy, trackHeight);
+              onDragEnd();
+            },
+            child: Stack(
+              children: [
+                // Track line
+                Center(
+                  child: Container(
+                    width: 2,
+                    height: trackHeight,
+                    color: colorScheme.outlineVariant,
+                  ),
+                ),
+                // Thumb
+                Positioned(
+                  top: (fraction * trackHeight - 10).clamp(0.0, trackHeight - 20),
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: Container(
+                      width: 8,
+                      height: 20,
+                      decoration: BoxDecoration(
+                        color: colorScheme.primary,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+                // Label bubble (shown while dragging)
+                if (label != null && label!.isNotEmpty)
+                  Positioned(
+                    top: (fraction * trackHeight - 14).clamp(0.0, trackHeight - 28),
+                    right: width + 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: colorScheme.inverseSurface,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        label!,
+                        style: TextStyle(
+                          color: colorScheme.onInverseSurface,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

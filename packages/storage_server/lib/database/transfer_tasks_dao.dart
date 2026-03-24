@@ -51,6 +51,13 @@ class TransferTasksDao {
         whereArgs: [existing.first['id']],
       );
     } else {
+      // 清理同名的旧 completed/failed 记录，避免 getUploadedBytes 读到过期数据
+      await _db.delete(
+        'transfer_tasks',
+        where: 'device_id = ? AND file_name = ? AND album_name = ?'
+            " AND task_status IN ('completed', 'failed')",
+        whereArgs: [deviceId, fileName, albumName],
+      );
       await _db.insert('transfer_tasks', {
         'device_id': deviceId,
         'file_name': fileName,
@@ -71,7 +78,7 @@ class TransferTasksDao {
   // Queries
   // ---------------------------------------------------------------------------
 
-  /// Returns the number of already-uploaded bytes, or 0 if no task exists.
+  /// Returns the number of already-uploaded bytes, or 0 if no active task exists.
   Future<int> getUploadedBytes({
     required String deviceId,
     required String fileName,
@@ -80,7 +87,8 @@ class TransferTasksDao {
     final rows = await _db.query(
       'transfer_tasks',
       columns: ['uploaded_bytes'],
-      where: 'device_id = ? AND file_name = ? AND album_name = ?',
+      where: 'device_id = ? AND file_name = ? AND album_name = ?'
+          " AND task_status NOT IN ('completed', 'failed')",
       whereArgs: [deviceId, fileName, albumName],
       orderBy: 'created_at DESC',
       limit: 1,

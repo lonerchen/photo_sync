@@ -43,7 +43,7 @@ class UploadQueueProvider extends ChangeNotifier {
     required List<UploadTask> tasks,
     required String baseUrl,
     required String deviceId,
-    required String Function(UploadTask) resolveFilePath,
+    required Future<String> Function(UploadTask) resolveFilePath,
   }) async {
     // Dispose any previous manager.
     await _disposeManager();

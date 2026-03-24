@@ -32,7 +32,31 @@ class _UploadScreenState extends State<UploadScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAlbums();
+    // Delay until after first frame so the permission dialog can render properly on iOS
+    WidgetsBinding.instance.addPostFrameCallback((_) => _requestPermissionAndLoad());
+  }
+
+  Future<void> _requestPermissionAndLoad() async {
+    final result = await PhotoManager.requestPermissionExtend();
+    if (!mounted) return;
+    if (result.isAuth || result == PermissionState.limited) {
+      _loadAlbums();
+    } else {
+      // Permission denied — show a prompt to open Settings
+      setState(() => _loadingAlbums = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('需要相册权限才能上传照片，请在设置中开启'),
+            action: SnackBarAction(
+              label: '去设置',
+              onPressed: () => PhotoManager.openSetting(),
+            ),
+            duration: const Duration(seconds: 6),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _loadAlbums() async {
@@ -51,6 +75,7 @@ class _UploadScreenState extends State<UploadScreen> {
     final connectionService = context.read<ConnectionService>();
     final queueProvider = context.read<UploadQueueProvider>();
     final server = connectionService.currentServer;
+
     if (server == null || _selectedAlbum == null) return;
 
     final assets = await _photoService.getAssets(
@@ -68,23 +93,19 @@ class _UploadScreenState extends State<UploadScreen> {
     }
 
     final tasks = <UploadTask>[];
-    _filePathCache.clear();
+    // Map from fileName → AssetEntity for lazy path resolution at upload time
+    final assetMap = <String, AssetEntity>{};
 
     final now = DateTime.now().millisecondsSinceEpoch;
     final albumName = _selectedAlbum!.name;
-    final serverId = server.serverId; // e.g. "192.168.1.1:8765"
-
-    // file sizes resolved alongside paths
-    final fileSizes = <String, int>{}; // fileName → bytes
-
-    // Collect all path-resolution futures so we can await them all.
-    final pathFutures = <Future<void>>[];
+    final serverId = server.serverId;
 
     for (final asset in assets) {
+      // iOS asset.id 可能包含 '/'（如 "UUID/L0/001"），需要替换成 '_' 避免路径问题
+      final safeId = asset.id.replaceAll('/', '_');
       if (asset.isLivePhoto) {
-        final baseName = asset.id;
-        final heicName = '$baseName.HEIC';
-        final movName = '$baseName.MOV';
+        final heicName = '$safeId.HEIC';
+        final movName = '$safeId.MOV';
 
         tasks.add(UploadTask(
           serverId: serverId,
@@ -112,20 +133,11 @@ class _UploadScreenState extends State<UploadScreen> {
           createdAt: now,
           updatedAt: now,
         ));
-
-        pathFutures.add(
-          _photoService.getLivePhotoFiles(asset).then((paths) {
-            if (paths != null) {
-              _filePathCache[heicName] = paths.heicPath;
-              _filePathCache[movName] = paths.movPath;
-              fileSizes[heicName] = File(paths.heicPath).lengthSync();
-              fileSizes[movName] = File(paths.movPath).lengthSync();
-            }
-          }),
-        );
+        assetMap[heicName] = asset;
+        assetMap[movName] = asset;
       } else {
         final ext = asset.mimeType?.split('/').last.toUpperCase() ?? 'JPG';
-        final fileName = '${asset.id}.$ext';
+        final fileName = '$safeId.$ext';
         final mediaType =
             asset.type == AssetType.video ? MediaType.video : MediaType.image;
 
@@ -141,26 +153,7 @@ class _UploadScreenState extends State<UploadScreen> {
           createdAt: now,
           updatedAt: now,
         ));
-
-        pathFutures.add(
-          _photoService.getAssetFilePath(asset).then((path) {
-            if (path != null) {
-              _filePathCache[fileName] = path;
-              fileSizes[fileName] = File(path).lengthSync();
-            }
-          }),
-        );
-      }
-    }
-
-    // Wait for all file paths to be resolved before starting upload.
-    await Future.wait(pathFutures);
-
-    // Patch totalSize into each task now that we have real file sizes.
-    for (var i = 0; i < tasks.length; i++) {
-      final size = fileSizes[tasks[i].fileName];
-      if (size != null && size > 0) {
-        tasks[i] = tasks[i].copyWith(totalSize: size);
+        assetMap[fileName] = asset;
       }
     }
 
@@ -168,11 +161,22 @@ class _UploadScreenState extends State<UploadScreen> {
 
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
 
+    // Resolve file path lazily at upload time (one at a time), not all upfront
     await queueProvider.startUpload(
       tasks: tasks,
       baseUrl: baseUrl,
       deviceId: 'android_device',
-      resolveFilePath: (task) => _filePathCache[task.fileName] ?? '',
+      resolveFilePath: (task) async {
+        final asset = assetMap[task.fileName];
+        if (asset == null) return '';
+        if (asset.isLivePhoto) {
+          final paths = await _photoService.getLivePhotoFiles(asset);
+          if (paths == null) return '';
+          return task.fileName.endsWith('.MOV') ? paths.movPath : paths.heicPath;
+        } else {
+          return await _photoService.getAssetFilePath(asset) ?? '';
+        }
+      },
     );
   }
 
@@ -244,6 +248,7 @@ class _UploadScreenState extends State<UploadScreen> {
                 uploadedCount: queueProvider.completedCount,
                 totalCount: queueProvider.totalCount,
                 bytesPerSecond: queueProvider.bytesPerSecond,
+                failedCount: queueProvider.failedCount,
               ),
               const SizedBox(height: 12),
             ],
@@ -252,7 +257,9 @@ class _UploadScreenState extends State<UploadScreen> {
               children: [
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: (!isConnected || isActive) ? null : _startUpload,
+                    onPressed: (!isConnected || isActive || _selectedAlbum == null)
+                        ? null
+                        : _startUpload,
                     child: Text(l.startUpload),
                   ),
                 ),

@@ -67,6 +67,6 @@ class PhotoLibraryService {
 
   Future<bool> _requestPermission() async {
     final result = await PhotoManager.requestPermissionExtend();
-    return result.isAuth;
+    return result.isAuth || result == PermissionState.limited;
   }
 }
