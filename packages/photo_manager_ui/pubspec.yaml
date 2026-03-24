@@ -1,0 +1,19 @@
+name: photo_manager_ui
+description: Shared Flutter UI component library for photo management.
+version: 0.1.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cached_network_image: ^3.3.0
+  photo_view: ^0.15.0
+  provider: ^6.1.0
+  common:
+    path: ../common
+
+flutter:
+  uses-material-design: true

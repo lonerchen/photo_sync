@@ -1,0 +1,8 @@
+name: photo_storage_cleaner
+
+packages:
+  - packages/**
+
+command:
+  bootstrap:
+    usePubspecOverrides: true
