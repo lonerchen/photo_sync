@@ -4,12 +4,14 @@ import 'package:common/common.dart';
 import 'package:flutter/foundation.dart';
 
 import '../database/mobile_database.dart';
+import '../services/background_transfer_service.dart';
 
 /// ChangeNotifier that wraps [UploadQueueManager] and exposes upload state
 /// to the UI. Also writes completed tasks to the `upload_records` table.
 class UploadQueueProvider extends ChangeNotifier {
   UploadQueueManager? _manager;
   StreamSubscription<QueueState>? _sub;
+  final _bgService = BackgroundTransferService();
 
   QueueStatus _status = QueueStatus.idle;
   int _totalCount = 0;
@@ -64,6 +66,7 @@ class UploadQueueProvider extends ChangeNotifier {
     );
 
     _sub = _manager!.stateStream.listen(_onState);
+    await _bgService.begin();
     await _manager!.addTasks(tasks);
   }
 
@@ -96,6 +99,11 @@ class UploadQueueProvider extends ChangeNotifier {
       _bytesPerSecond = bytesDelta / (elapsed / 1000.0);
       _lastBytesSnapshot = _manager!.totalUploadedBytes;
       _lastSpeedCheck = now;
+    }
+
+    // 上传全部完成时释放后台任务
+    if (state.status == QueueStatus.idle) {
+      _bgService.end();
     }
 
     // Write newly completed tasks to upload_records.
@@ -139,6 +147,7 @@ class UploadQueueProvider extends ChangeNotifier {
     _manager?.dispose();
     _manager = null;
     _persisted.clear();
+    await _bgService.end();
   }
 
   @override
