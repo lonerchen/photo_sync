@@ -193,13 +193,16 @@ class ThumbnailQueueService implements IThumbnailQueue {
     required IServerDatabase database,
     required WebSocketServer wsServer,
     required String storagePath,
+    Future<String> Function()? storagePathResolver,
   })  : _database = database,
         _wsServer = wsServer,
-        _storagePath = storagePath;
+        _initialStoragePath = storagePath,
+        _storagePathResolver = storagePathResolver;
 
   final IServerDatabase _database;
   final WebSocketServer _wsServer;
-  final String _storagePath;
+  final String _initialStoragePath;
+  final Future<String> Function()? _storagePathResolver;
 
   /// Called on the main isolate after each thumbnail is successfully generated.
   /// Receives the [mediaId] of the completed item.
@@ -214,6 +217,12 @@ class ThumbnailQueueService implements IThumbnailQueue {
 
   bool _processing = false;
   bool _started = false;
+
+  Future<String> _currentStoragePath() async {
+    final resolved = await _storagePathResolver?.call();
+    if (resolved != null && resolved.isNotEmpty) return resolved;
+    return _initialStoragePath;
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -300,8 +309,9 @@ class ThumbnailQueueService implements IThumbnailQueue {
       return;
     }
 
+    final storagePath = await _currentStoragePath();
     final thumbnailPath = p.join(
-      _storagePath,
+      storagePath,
       '.thumbnails',
       item.deviceId,
       item.albumName,

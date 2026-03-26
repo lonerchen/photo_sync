@@ -4,6 +4,15 @@ import 'package:common/common.dart';
 ///
 /// Concrete implementation lives in the database layer (task 6).
 abstract interface class IServerDatabase {
+  /// Moves all stored data from [oldPath] to [newPath] and rewrites DB paths.
+  ///
+  /// Returns number of top-level move tasks completed.
+  Future<int> migrateStoragePath({
+    required String oldPath,
+    required String newPath,
+    void Function(int done, int total)? onProgress,
+  });
+
   // -------------------------------------------------------------------------
   // Devices
   // -------------------------------------------------------------------------

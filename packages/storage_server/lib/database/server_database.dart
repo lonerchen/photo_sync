@@ -234,6 +234,140 @@ class ServerDatabase implements IServerDatabase {
   }
 
   // ---------------------------------------------------------------------------
+  // IServerDatabase – Storage migration
+  // ---------------------------------------------------------------------------
+
+  @override
+  Future<int> migrateStoragePath({
+    required String oldPath,
+    required String newPath,
+    void Function(int done, int total)? onProgress,
+  }) async {
+    _assertOpen();
+
+    final oldRoot = _normalizeDirPath(oldPath);
+    final newRoot = _normalizeDirPath(newPath);
+    if (oldRoot == newRoot) {
+      onProgress?.call(1, 1);
+      return 0;
+    }
+
+    await Directory(newRoot).create(recursive: true);
+
+    final tasks = <({String src, String dst})>[];
+    final devices = await _devicesDao.getAllDevices();
+    for (final d in devices) {
+      final src = p.join(oldRoot, d.deviceId);
+      if (await Directory(src).exists()) {
+        tasks.add((src: src, dst: p.join(newRoot, d.deviceId)));
+      }
+    }
+
+    final thumbSrc = p.join(oldRoot, '.thumbnails');
+    if (await Directory(thumbSrc).exists()) {
+      tasks.add((src: thumbSrc, dst: p.join(newRoot, '.thumbnails')));
+    }
+
+    final total = tasks.isEmpty ? 1 : tasks.length;
+    int done = 0;
+    onProgress?.call(done, total);
+
+    for (final t in tasks) {
+      await _moveDirectory(t.src, t.dst);
+      done++;
+      onProgress?.call(done, total);
+    }
+
+    await _db!.transaction((txn) async {
+      await txn.rawUpdate(
+        '''
+        UPDATE connected_devices
+        SET storage_path = REPLACE(storage_path, ?, ?)
+        WHERE storage_path LIKE ? || '%'
+        ''',
+        [oldRoot, newRoot, oldRoot],
+      );
+
+      await txn.rawUpdate(
+        '''
+        UPDATE media_items
+        SET file_path = REPLACE(file_path, ?, ?),
+            updated_at = ?
+        WHERE file_path LIKE ? || '%'
+        ''',
+        [oldRoot, newRoot, DateTime.now().millisecondsSinceEpoch, oldRoot],
+      );
+
+      await txn.rawUpdate(
+        '''
+        UPDATE media_items
+        SET thumbnail_path = REPLACE(thumbnail_path, ?, ?),
+            updated_at = ?
+        WHERE thumbnail_path IS NOT NULL
+          AND thumbnail_path LIKE ? || '%'
+        ''',
+        [oldRoot, newRoot, DateTime.now().millisecondsSinceEpoch, oldRoot],
+      );
+
+      await txn.rawUpdate(
+        '''
+        UPDATE transfer_tasks
+        SET temp_file_path = REPLACE(temp_file_path, ?, ?),
+            updated_at = ?
+        WHERE temp_file_path LIKE ? || '%'
+        ''',
+        [oldRoot, newRoot, DateTime.now().millisecondsSinceEpoch, oldRoot],
+      );
+    });
+
+    onProgress?.call(total, total);
+    return tasks.length;
+  }
+
+  String _normalizeDirPath(String rawPath) {
+    var normalized = p.normalize(rawPath);
+    while (normalized.endsWith(Platform.pathSeparator) &&
+        normalized.length > 1) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    return normalized;
+  }
+
+  Future<void> _moveDirectory(String sourcePath, String targetPath) async {
+    final source = Directory(sourcePath);
+    if (!await source.exists()) return;
+
+    final target = Directory(targetPath);
+    await target.parent.create(recursive: true);
+
+    try {
+      await source.rename(targetPath);
+      return;
+    } catch (_) {
+      // Cross-volume move fallback: copy + delete source.
+    }
+
+    await _copyDirectory(source, target);
+    await source.delete(recursive: true);
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory target) async {
+    await target.create(recursive: true);
+    await for (final entity in source.list(recursive: false, followLinks: false)) {
+      if (entity is Directory) {
+        await _copyDirectory(
+          entity,
+          Directory(p.join(target.path, p.basename(entity.path))),
+        );
+      } else if (entity is File) {
+        final dst = File(p.join(target.path, p.basename(entity.path)));
+        await dst.parent.create(recursive: true);
+        await entity.copy(dst.path);
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // IServerDatabase – Devices
   // ---------------------------------------------------------------------------
 

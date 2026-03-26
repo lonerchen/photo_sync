@@ -23,9 +23,11 @@ class HttpServerService {
     required IServerDatabase database,
     required IThumbnailQueue thumbnailQueue,
     required String storagePath,
+    Future<String> Function()? storagePathResolver,
   })  : _database = database,
         _thumbnailQueue = thumbnailQueue,
-        _storagePath = storagePath,
+        _initialStoragePath = storagePath,
+        _storagePathResolver = storagePathResolver,
         _wsServer = WebSocketServer(
           database: database,
           thumbnailQueue: thumbnailQueue,
@@ -34,7 +36,8 @@ class HttpServerService {
   final int port;
   final IServerDatabase _database;
   final IThumbnailQueue _thumbnailQueue;
-  final String _storagePath;
+  final String _initialStoragePath;
+  final Future<String> Function()? _storagePathResolver;
   final WebSocketServer _wsServer;
 
   /// Called on the main isolate after a media item is inserted into the DB.
@@ -45,6 +48,12 @@ class HttpServerService {
   WebSocketServer get wsServer => _wsServer;
 
   HttpServer? _server;
+
+  Future<String> _currentStoragePath() async {
+    final resolved = await _storagePathResolver?.call();
+    if (resolved != null && resolved.isNotEmpty) return resolved;
+    return _initialStoragePath;
+  }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -145,10 +154,11 @@ class HttpServerService {
     try {
       final body = await _parseJson(request);
       final req = DeviceRegisterRequest.fromJson(body);
+      final storagePath = await _currentStoragePath();
 
       // Build a storage sub-path for this device (use deviceId as directory name).
       final deviceStoragePath =
-          '$_storagePath${Platform.pathSeparator}${req.deviceId}';
+          '$storagePath${Platform.pathSeparator}${req.deviceId}';
 
       final device = await _database.registerDevice(
         deviceId: req.deviceId,
@@ -392,6 +402,7 @@ class HttpServerService {
       final body = await _parseJson(request);
       final req = UploadInitRequest.fromJson(body);
       final safeFileName = _safeFileName(req.fileName);
+      final storagePath = await _currentStoragePath();
 
       final uploadedBytes = await _database.getUploadedBytes(
         deviceId: req.deviceId,
@@ -401,7 +412,7 @@ class HttpServerService {
 
       // Ensure transfer task record exists.
       final deviceDir =
-          '$_storagePath${Platform.pathSeparator}${req.deviceId}';
+          '$storagePath${Platform.pathSeparator}${req.deviceId}';
       final tempPath =
           '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_$safeFileName';
 
@@ -468,9 +479,10 @@ class HttpServerService {
       final fileName = _safeFileName(rawFileName);
       final offset = int.tryParse(offsetStr);
       if (offset == null) return _badRequest('Invalid offset');
+      final storagePath = await _currentStoragePath();
 
       // Determine temp file path.
-      final deviceDir = '$_storagePath${Platform.pathSeparator}$deviceId';
+      final deviceDir = '$storagePath${Platform.pathSeparator}$deviceId';
       final tempPath = '$deviceDir${Platform.pathSeparator}.tmp_${albumName}_$fileName';
 
       final tempFile = File(tempPath);
@@ -508,9 +520,10 @@ class HttpServerService {
       final body = await _parseJson(request);
       final req = UploadCompleteRequest.fromJson(body);
       final safeFileName = _safeFileName(req.fileName);
+      final storagePath = await _currentStoragePath();
 
       final deviceDir =
-          '$_storagePath${Platform.pathSeparator}${req.deviceId}';
+          '$storagePath${Platform.pathSeparator}${req.deviceId}';
       final tempPath =
           '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_$safeFileName';
 

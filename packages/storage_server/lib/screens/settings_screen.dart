@@ -81,11 +81,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Expanded(
                       child: TextField(
                         controller: _pathController,
+                        enabled: !provider.isBusy,
                         decoration: InputDecoration(
                           hintText: '/path/to/storage',
                           border: const OutlineInputBorder(),
                           errorText: provider.validationError,
-                          suffixIcon: provider.isValidating
+                          suffixIcon: provider.isBusy
                               ? const Padding(
                                   padding: EdgeInsets.all(12),
                                   child: SizedBox(
@@ -103,10 +104,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ElevatedButton.icon(
                       icon: const Icon(Icons.folder_open),
                       label: Text(l.browse),
-                      onPressed: provider.isValidating ? null : () => _pickFolder(provider),
+                      onPressed: provider.isBusy ? null : () => _pickFolder(provider),
                     ),
                   ],
                 ),
+                if (provider.isMigrating) ...[
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: provider.migrationProgress),
+                  const SizedBox(height: 6),
+                  Text(
+                    provider.migrationMessage,
+                    style: const TextStyle(fontSize: 12, color: Colors.blueGrey),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 if (provider.isConfigured)
                   _PathStatusRow(path: provider.storagePath!),

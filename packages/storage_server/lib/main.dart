@@ -36,6 +36,8 @@ Future<void> main() async {
       database: db,
       thumbnailQueue: proxyQueue,
       storagePath: storagePath,
+      storagePathResolver: () async =>
+          await pathService.getStoragePath() ?? storagePath,
     );
     await httpServer.start();
 
@@ -52,6 +54,8 @@ Future<void> main() async {
       database: db,
       wsServer: httpServer.wsServer,
       storagePath: storagePath,
+      storagePathResolver: () async =>
+          await pathService.getStoragePath() ?? storagePath,
     );
     await thumbnailQueue.start();
 
@@ -135,7 +139,10 @@ class StorageServerApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: mediaListProvider),
         ChangeNotifierProvider(create: (_) => ThumbnailQueueProvider()),
         ChangeNotifierProvider(
-          create: (_) => StorageSettingsProvider(pathService: pathService),
+          create: (_) => StorageSettingsProvider(
+            pathService: pathService,
+            database: database,
+          ),
         ),
         Provider<HttpServerService>.value(value: httpServer),
       ],
