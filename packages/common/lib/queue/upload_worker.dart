@@ -94,9 +94,9 @@ class UploadWorker {
         if (chunk.isEmpty) break;
 
         debugPrint('[Worker] chunk #$chunkIndex offset=$offset size=${chunk.length} for ${task.fileName}');
-        await _retryRequest(() => _postChunk(offset, chunk));
-
-        offset += chunk.length;
+        final confirmedUploaded =
+            await _retryRequest(() => _postChunk(offset, chunk));
+        offset = confirmedUploaded;
         chunkIndex++;
         onProgress?.call(offset, totalSize);
         debugPrint('[Worker] progress $offset/$totalSize for ${task.fileName}');
@@ -161,7 +161,7 @@ class UploadWorker {
     return apiResp.data!;
   }
 
-  Future<void> _postChunk(int offset, List<int> chunk) async {
+  Future<int> _postChunk(int offset, List<int> chunk) async {
     final uri = Uri.parse('$baseUrl/api/v1/upload/chunk');
     final response = await _client.post(
       uri,
@@ -176,10 +176,18 @@ class UploadWorker {
     );
     _assertSuccess(response);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
-    final apiResp = ApiResponse<void>.fromJson(body, null);
+    final apiResp = ApiResponse<Map<String, dynamic>>.fromJson(
+      body,
+      (d) => d as Map<String, dynamic>,
+    );
     if (!apiResp.isSuccess) {
       throw Exception('upload/chunk failed at offset $offset: ${apiResp.message}');
     }
+    final uploaded = apiResp.data?['uploaded_bytes'];
+    if (uploaded is! int) {
+      throw Exception('upload/chunk response missing uploaded_bytes');
+    }
+    return uploaded;
   }
 
   Future<void> _postComplete(UploadCompleteRequest req) async {

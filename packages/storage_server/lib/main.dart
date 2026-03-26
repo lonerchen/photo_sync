@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:common/common.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -73,16 +75,43 @@ Future<void> main() async {
     final albumProvider = AlbumProvider(database: db);
     final deviceListProvider = DeviceListProvider(database: db);
 
+    Timer? refreshDebounceTimer;
+    bool refreshInFlight = false;
+    bool refreshQueued = false;
+    bool refreshDevicesRequested = false;
+
+    Future<void> scheduleRefresh({required bool includeDevices}) async {
+      refreshQueued = true;
+      refreshDevicesRequested = refreshDevicesRequested || includeDevices;
+
+      refreshDebounceTimer?.cancel();
+      refreshDebounceTimer = Timer(const Duration(milliseconds: 350), () async {
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+        try {
+          while (refreshQueued) {
+            final needDeviceRefresh = refreshDevicesRequested;
+            refreshQueued = false;
+            refreshDevicesRequested = false;
+
+            await mediaListProvider.refresh();
+            await albumProvider.refresh();
+            if (needDeviceRefresh) {
+              await deviceListProvider.refresh();
+            }
+          }
+        } finally {
+          refreshInFlight = false;
+        }
+      });
+    }
+
     thumbnailQueue.onThumbnailReady = (_) {
-      mediaListProvider.refresh();
-      albumProvider.refresh();
-      deviceListProvider.refresh();
+      scheduleRefresh(includeDevices: false);
     };
 
     httpServer.onMediaInserted = (_) {
-      mediaListProvider.refresh();
-      albumProvider.refresh();
-      deviceListProvider.refresh();
+      scheduleRefresh(includeDevices: true);
     };
 
     runApp(StorageServerApp(

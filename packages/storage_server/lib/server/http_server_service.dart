@@ -416,12 +416,17 @@ class HttpServerService {
       final tempPath =
           '$deviceDir${Platform.pathSeparator}.tmp_${req.albumName}_$safeFileName';
 
+      // 以临时文件真实长度为准，避免 DB 断点与文件实际长度不一致导致错位续传。
+      final tempFile = File(tempPath);
+      final actualUploaded = await tempFile.exists() ? await tempFile.length() : 0;
+      final reconciledUploaded = actualUploaded > uploadedBytes ? actualUploaded : uploadedBytes;
+
       await _database.upsertTransferTask(
         deviceId: req.deviceId,
         fileName: safeFileName,
         albumName: req.albumName,
         totalSize: req.totalSize,
-        uploadedBytes: uploadedBytes,
+        uploadedBytes: reconciledUploaded,
         tempFilePath: tempPath,
         taskStatus: 'uploading',
         mediaType: req.mediaType,
@@ -429,7 +434,7 @@ class HttpServerService {
       );
 
       return _ok(UploadInitResponse(
-        uploadedBytes: uploadedBytes,
+        uploadedBytes: reconciledUploaded,
         chunkSize: 4 * 1024 * 1024, // 4 MB
       ).toJson());
     } catch (e) {
@@ -487,17 +492,52 @@ class HttpServerService {
 
       final tempFile = File(tempPath);
       await tempFile.parent.create(recursive: true);
+      final currentLength = await tempFile.exists() ? await tempFile.length() : 0;
 
-      // Open for random-access write.
+      // 只允许从当前长度继续写，防止重试时重复追加导致文件损坏。
+      if (currentLength < offset) {
+        return Response(
+          409,
+          body: jsonEncode({
+            'code': 1,
+            'message': 'Offset ahead of server state',
+            'data': {'expected_offset': currentLength},
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (currentLength > offset) {
+        // 幂等处理：这个 chunk 可能已写入（客户端重试），直接返回当前进度。
+        if (currentLength >= offset + chunkBytes.length) {
+          await _database.updateUploadedBytes(
+            deviceId: deviceId,
+            fileName: fileName,
+            albumName: albumName,
+            uploadedBytes: currentLength,
+          );
+          return _ok({'uploaded_bytes': currentLength});
+        }
+        return Response(
+          409,
+          body: jsonEncode({
+            'code': 1,
+            'message': 'Offset overlaps partial chunk',
+            'data': {'expected_offset': currentLength},
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // currentLength == offset: strictly append next chunk.
       final raf = await tempFile.open(mode: FileMode.append);
       try {
-        await raf.setPosition(offset);
         await raf.writeFrom(chunkBytes);
       } finally {
         await raf.close();
       }
 
-      final newUploaded = offset + chunkBytes.length;
+      final newUploaded = currentLength + chunkBytes.length;
       await _database.updateUploadedBytes(
         deviceId: deviceId,
         fileName: fileName,
