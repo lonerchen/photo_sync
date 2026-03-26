@@ -26,6 +26,13 @@ class HelpScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _SectionCard(icon: Icons.restore_outlined, title: l.helpRestoreTitle, content: l.helpRestoreContent),
           const SizedBox(height: 12),
+          const _SectionCard(
+            icon: Icons.privacy_tip_outlined,
+            title: '设备信息说明',
+            content:
+                '为便于在存储端区分不同手机，本应用会读取设备基础信息（如设备名称、型号）用于局域网连接展示和设备管理，不会采集通讯录、短信、定位等无关信息，也不会上传到第三方云服务。',
+          ),
+          const SizedBox(height: 12),
           _SectionCard(icon: Icons.warning_amber_outlined, title: l.helpNotesTitle, steps: [l.helpNote1, l.helpNote2, l.helpNote3, l.helpNote4]),
         ],
       ),

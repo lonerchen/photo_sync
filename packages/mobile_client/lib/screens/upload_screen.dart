@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import '../providers/upload_queue_provider.dart';
 import '../database/mobile_database.dart';
 import '../services/connection_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/photo_library_service.dart';
 
 /// Screen for selecting photos and uploading them to the connected server.
@@ -192,6 +193,7 @@ class _UploadScreenState extends State<UploadScreen> {
     if (!mounted) return;
 
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
+    final deviceId = await DeviceIdentityService.instance.getDeviceId();
 
     // 注册回调，上传完成时更新 badge
     queueProvider.onAssetUploaded = (assetId) {
@@ -201,7 +203,7 @@ class _UploadScreenState extends State<UploadScreen> {
     await queueProvider.startUpload(
       tasks: tasks,
       baseUrl: baseUrl,
-      deviceId: 'android_device',
+      deviceId: deviceId,
       resolveFilePath: (task) async {
         final asset = assetMap[task.fileName];
         if (asset == null) return '';
@@ -244,6 +246,7 @@ class _UploadScreenState extends State<UploadScreen> {
     final albumName = _selectedAlbum?.name ?? 'Default';
     final serverId = server.serverId;
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
+    final deviceId = await DeviceIdentityService.instance.getDeviceId();
     final safeId = asset.id.replaceAll('/', '_');
 
     final tasks = <UploadTask>[];
@@ -286,7 +289,7 @@ class _UploadScreenState extends State<UploadScreen> {
     await queueProvider.enqueueTask(
       tasks: tasks,
       baseUrl: baseUrl,
-      deviceId: 'android_device',
+      deviceId: deviceId,
       resolveFilePath: (task) async {
         final a = assetMap[task.fileName];
         if (a == null) return '';

@@ -10,6 +10,7 @@ import '../providers/album_provider.dart';
 import '../providers/media_list_provider.dart';
 import '../providers/restore_provider.dart';
 import '../services/connection_service.dart';
+import '../services/device_identity_service.dart';
 import '../services/discovery_service.dart';
 import 'restore_screen.dart';
 
@@ -34,6 +35,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   ViewMode _viewMode = ViewMode.grid;
   bool _restoreMode = false;
   Timer? _refreshDebounce;
+  String _deviceId = 'mobile_device';
 
   @override
   void initState() {
@@ -41,7 +43,8 @@ class _BrowseScreenState extends State<BrowseScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
-  void _init() {
+  Future<void> _init() async {
+    _deviceId = await DeviceIdentityService.instance.getDeviceId();
     final connectionService = context.read<ConnectionService>();
     final discoveryService = context.read<DiscoveryService>();
     _subscribeToWsMessages(connectionService);
@@ -50,16 +53,11 @@ class _BrowseScreenState extends State<BrowseScreen> {
     discoveryService.startDiscovery();
 
     // Try auto-connect from last known server
-    connectionService.tryAutoConnect(widget.db, _deviceId()).then((_) {
+    connectionService.tryAutoConnect(widget.db, _deviceId).then((_) {
       if (connectionService.status == ConnectionStatus.connected) {
         _loadAlbums(connectionService);
       }
     });
-  }
-
-  String _deviceId() {
-    // Use a stable device identifier
-    return 'android_device';
   }
 
   void _subscribeToWsMessages(ConnectionService connectionService) {
@@ -87,7 +85,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final server = connectionService.currentServer;
     if (server == null) return;
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
-    context.read<AlbumProvider>().loadAlbums(baseUrl, _deviceId());
+    context.read<AlbumProvider>().loadAlbums(baseUrl, _deviceId);
   }
 
   void _onAlbumSelected(Album album) {
@@ -101,7 +99,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
     context
         .read<MediaListProvider>()
-        .load(baseUrl, _deviceId(), album.albumName);
+        .load(baseUrl, _deviceId, album.albumName);
   }
 
   void _onItemTap(MediaItem item) {
@@ -273,7 +271,8 @@ class _NotConnectedPageState extends State<_NotConnectedPage> {
     );
 
     final connectionService = context.read<ConnectionService>();
-    final ok = await connectionService.connect(server, 'android_device');
+    final deviceId = await DeviceIdentityService.instance.getDeviceId();
+    final ok = await connectionService.connect(server, deviceId);
 
     if (!mounted) return;
     setState(() => _connecting = false);

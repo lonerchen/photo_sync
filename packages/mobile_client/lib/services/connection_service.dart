@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import '../database/mobile_database.dart';
+import 'device_identity_service.dart';
 
 /// Connection lifecycle states.
 enum ConnectionStatus {
@@ -127,6 +128,7 @@ class ConnectionService extends ChangeNotifier {
 
   Future<bool> _registerDevice(ServerInfo server, String deviceId) async {
     try {
+      final identity = await DeviceIdentityService.instance.getIdentity();
       final uri = Uri.parse(
           'http://${server.ipAddress}:${server.port}/api/v1/devices/register');
       final response = await http
@@ -135,10 +137,8 @@ class ConnectionService extends ChangeNotifier {
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'device_id': deviceId,
-              'device_name': deviceId,
-              'platform': defaultTargetPlatform == TargetPlatform.iOS
-                  ? 'ios'
-                  : 'android',
+              'device_name': identity.deviceName,
+              'platform': identity.platform,
             }),
           )
           .timeout(const Duration(seconds: 10));
