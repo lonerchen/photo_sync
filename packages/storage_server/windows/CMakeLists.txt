@@ -61,13 +61,11 @@ include(flutter/generated_plugins.cmake)
 # run in place. This is done instead of making a separate bundle (as on Linux)
 # so that building and running from within Visual Studio will work.
 set(BUILD_BUNDLE_DIR "$<TARGET_FILE_DIR:${BINARY_NAME}>")
-# Make the "install" step default to a "bin" directory beneath the project root.
-set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}" CACHE PATH "..." FORCE)
+# Keep all runtime artifacts in the same directory as the executable.
+set(INSTALL_BUNDLE_DATA_DIR "${BUILD_BUNDLE_DIR}/data")
+set(INSTALL_BUNDLE_LIB_DIR "${BUILD_BUNDLE_DIR}")
 
-set(INSTALL_BUNDLE_DATA_DIR "${CMAKE_INSTALL_PREFIX}/bin/data")
-set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}/bin")
-
-install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}/bin"
+install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${BUILD_BUNDLE_DIR}"
   COMPONENT Runtime)
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)

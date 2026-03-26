@@ -16,6 +16,8 @@ dependencies:
   photo_manager_ui:
     path: ../photo_manager_ui
   sqflite_common_ffi: ^2.3.0
+  # Pin sqlite3 below 3.x to avoid Windows native hook build stalls/lock issues.
+  sqlite3: 2.9.4
   path: ^1.9.0
   path_provider: ^2.1.0
   provider: ^6.1.0
