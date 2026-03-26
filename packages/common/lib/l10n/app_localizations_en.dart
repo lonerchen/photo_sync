@@ -2,7 +2,7 @@ import 'app_localizations.dart';
 
 class AppLocalizationsEn extends AppLocalizations {
   // Common / Navigation
-  @override String get appTitle => 'Photo Storage Cleaner';
+  @override String get appTitle => 'PhotoSync 照片搬家';
   @override String get navBrowse => 'Browse';
   @override String get navUpload => 'Upload';
   @override String get navCleanUp => 'Clean Up';
@@ -47,6 +47,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override String get noPhotosInRange => 'No photos found for the selected range.';
   @override String uploadSummary(int done, int total, int failed) =>
       'Done: $done/$total uploaded${failed > 0 ? ', $failed failed' : ''}.';
+  @override String get photoPermissionRequired => 'Photo library permission is required. Please enable it in Settings.';
+  @override String get goToSettings => 'Go to Settings';
+  @override String get connectServerFirst => 'Please connect to a storage server first.';
+  @override String get alreadyUploaded => 'Already uploaded';
+  @override String photoCount(int n) => '$n photo${n == 1 ? '' : 's'}';
+  @override String get noPhotos => 'No photos';
+  @override String get sortNewestFirst => 'Newest first';
+  @override String get sortOldestFirst => 'Oldest first';
 
   // Cleanup screen
   @override String get cleanupTitle => 'Clean Up Photos';
@@ -95,7 +103,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override String get helpWhatContent =>
       'This app backs up your phone photos to a Mac/PC storage server on your local network. Once backed up, you can safely delete local copies to free up storage.';
   @override String get helpPrereqTitle => 'Before you start';
-  @override String get helpPrereqStep1 => 'Launch Photo Storage Server on your Mac/PC';
+  @override String get helpPrereqStep1 => 'Launch PhotoSync Storage on your Mac/PC';
   @override String get helpPrereqStep2 => 'Make sure your phone and computer are on the same Wi-Fi';
   @override String get helpPrereqStep3 => 'Note the server address shown at the top of the desktop app (e.g. 192.168.1.x:8765)';
   @override String get helpStep1Title => 'Step 1: Connect to server';
@@ -130,10 +138,10 @@ class AppLocalizationsEn extends AppLocalizations {
   // Help — desktop
   @override String get helpDesktopWhatTitle => 'What is this app?';
   @override String get helpDesktopWhatContent =>
-      'Photo Storage Server runs on your Mac/PC as a local network photo storage server. Paired with the mobile app, it backs up phone photos to your computer while keeping full-resolution originals.';
+      'PhotoSync Storage runs on your Mac/PC as a local network photo storage server. Paired with the mobile app, it backs up phone photos to your computer while keeping full-resolution originals.';
   @override String get helpDesktopQuickStartTitle => 'Quick start';
   @override String get helpDesktopQuickStart1 => 'Launch this app — the server address is shown at the top (e.g. 192.168.1.x:8765)';
-  @override String get helpDesktopQuickStart2 => 'Install and open Photo Storage Cleaner on your phone';
+  @override String get helpDesktopQuickStart2 => 'Install and open PhotoSync on your phone';
   @override String get helpDesktopQuickStart3 => 'Make sure phone and computer are on the same Wi-Fi';
   @override String get helpDesktopQuickStart4 => 'Enter the address shown above in the mobile app';
   @override String get helpDesktopQuickStart5 => 'Once connected, upload photos from the mobile app';

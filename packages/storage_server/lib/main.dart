@@ -8,6 +8,7 @@ import 'database/server_database.dart';
 import 'providers/providers.dart';
 import 'screens/main_shell.dart';
 import 'server/http_server_service.dart';
+import 'services/discovery_service.dart';
 import 'services/i_thumbnail_queue.dart';
 import 'services/storage_path_service.dart';
 import 'services/thumbnail_queue_service.dart';
@@ -37,6 +38,14 @@ Future<void> main() async {
       storagePath: storagePath,
     );
     await httpServer.start();
+
+    // Start LAN discovery broadcast (UDP + mDNS) so mobile clients can find us.
+    final discoveryService = DiscoveryService(
+      serverId: 'photosync-server',
+      serverName: 'PhotoSync 存储端',
+      port: httpServer.port,
+    );
+    await discoveryService.start();
 
     // Start thumbnail queue service (needs wsServer reference from httpServer).
     final thumbnailQueue = ThumbnailQueueService(
@@ -131,7 +140,7 @@ class StorageServerApp extends StatelessWidget {
         Provider<HttpServerService>.value(value: httpServer),
       ],
       child: MaterialApp(
-        title: 'Photo Storage Server',
+        title: 'PhotoSync 存储端',
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

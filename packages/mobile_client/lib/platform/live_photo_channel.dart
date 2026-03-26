@@ -2,9 +2,9 @@ import 'package:flutter/services.dart';
 
 /// Platform channel for saving Live Photos on iOS.
 ///
-/// Wraps the native `com.photosync/live_photo` MethodChannel.
+/// Wraps the native `com.loner.photosync/live_photo` MethodChannel.
 class LivePhotoChannel {
-  static const _channel = MethodChannel('com.photosync/live_photo');
+  static const _channel = MethodChannel('com.loner.photosync/live_photo');
 
   /// Saves a Live Photo to the system photo library.
   ///

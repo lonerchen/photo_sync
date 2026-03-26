@@ -14,6 +14,9 @@
 
 #define APSTUDIO_READONLY_SYMBOLS
 
+// App icon
+IDI_APP_ICON ICON "app_icon.ico"
+
 /////////////////////////////////////////////////////////////////////////////
 // Version
 
@@ -31,12 +34,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "PhotoSync"
-            VALUE "FileDescription", "Photo Storage Server"
+            VALUE "FileDescription", "PhotoSync Storage"
             VALUE "FileVersion", "0.1.0.0"
             VALUE "InternalName", "storage_server"
             VALUE "LegalCopyright", "Copyright (C) 2024 PhotoSync"
             VALUE "OriginalFilename", "storage_server.exe"
-            VALUE "ProductName", "Photo Storage Server"
+            VALUE "ProductName", "PhotoSync Storage"
             VALUE "ProductVersion", "0.1.0.0"
         END
     END

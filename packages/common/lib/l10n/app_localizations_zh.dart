@@ -47,6 +47,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override String get noPhotosInRange => '所选范围内没有照片。';
   @override String uploadSummary(int done, int total, int failed) =>
       '完成：$done/$total 已上传${failed > 0 ? '，$failed 失败' : ''}。';
+  @override String get photoPermissionRequired => '需要相册权限才能上传照片，请在设置中开启。';
+  @override String get goToSettings => '去设置';
+  @override String get connectServerFirst => '请先连接存储服务器。';
+  @override String get alreadyUploaded => '该照片已上传';
+  @override String photoCount(int n) => '共 $n 张照片';
+  @override String get noPhotos => '暂无照片';
+  @override String get sortNewestFirst => '最新在前';
+  @override String get sortOldestFirst => '最旧在前';
 
   // Cleanup screen
   @override String get cleanupTitle => '清理照片';
@@ -94,7 +102,7 @@ class AppLocalizationsZh extends AppLocalizations {
   @override String get helpWhatContent =>
       '本应用可将手机照片备份到局域网内的 Mac/PC 存储服务器，备份完成后可安全删除手机本地副本，释放存储空间。';
   @override String get helpPrereqTitle => '使用前准备';
-  @override String get helpPrereqStep1 => '在 Mac/PC 上启动 Photo Storage Server 桌面应用';
+  @override String get helpPrereqStep1 => '在 Mac/PC 上启动 PhotoSync 存储端桌面应用';
   @override String get helpPrereqStep2 => '确保手机与电脑连接在同一 Wi-Fi 网络';
   @override String get helpPrereqStep3 => '记录桌面端顶部显示的服务器地址（如 192.168.1.x:8765）';
   @override String get helpStep1Title => '第一步：连接服务器';
@@ -129,11 +137,11 @@ class AppLocalizationsZh extends AppLocalizations {
   // Help — desktop
   @override String get helpDesktopWhatTitle => '这是什么应用？';
   @override String get helpDesktopWhatContent =>
-      'Photo Storage Server 是一个运行在 Mac/PC 上的局域网照片存储服务器。'
+      'PhotoSync 存储端是一个运行在 Mac/PC 上的局域网照片存储服务器。'
       '配合手机端应用，可将手机照片备份到本机，释放手机存储空间，同时保留完整原图。';
   @override String get helpDesktopQuickStartTitle => '快速开始';
   @override String get helpDesktopQuickStart1 => '启动本应用，顶部会显示服务器地址（如 192.168.1.x:8765）';
-  @override String get helpDesktopQuickStart2 => '在手机上安装并打开 Photo Storage Cleaner 移动端应用';
+  @override String get helpDesktopQuickStart2 => '在手机上安装并打开 PhotoSync 照片搬家移动端应用';
   @override String get helpDesktopQuickStart3 => '确保手机与电脑在同一 Wi-Fi 网络下';
   @override String get helpDesktopQuickStart4 => '在手机端输入上方显示的地址进行连接';
   @override String get helpDesktopQuickStart5 => '连接成功后即可从手机端上传照片';

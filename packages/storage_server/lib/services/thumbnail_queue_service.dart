@@ -68,7 +68,9 @@ Future<_ThumbnailResult> _processTask(_ThumbnailTask task) async {
   try {
     await Directory(p.dirname(task.thumbnailPath)).create(recursive: true);
 
-    if (task.mediaType == MediaType.video) {
+    if (task.mediaType == MediaType.video ||
+        (task.mediaType == MediaType.livePhoto &&
+            task.filePath.toLowerCase().endsWith('.mov'))) {
       await _generateVideoThumbnail(task.filePath, task.thumbnailPath);
     } else {
       await _generateImageThumbnail(task.filePath, task.thumbnailPath);

@@ -89,11 +89,11 @@ class DiscoveryService {
     }
   }
 
-  void _sendBroadcast() {
+  void _sendBroadcast() async {
     final socket = _udpSocket;
     if (socket == null) return;
 
-    final ip = _localIpAddress();
+    final ip = await _localIpAddress();
     final payload = jsonEncode({
       'type': 'server_announce',
       'server_id': serverId,
@@ -116,9 +116,9 @@ class DiscoveryService {
   }
 
   /// Returns the first non-loopback IPv4 address, or '127.0.0.1' as fallback.
-  String _localIpAddress() {
+  Future<String> _localIpAddress() async {
     try {
-      final interfaces = NetworkInterface.listSync(
+      final interfaces = await NetworkInterface.list(
         type: InternetAddressType.IPv4,
         includeLoopback: false,
       );

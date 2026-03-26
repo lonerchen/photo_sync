@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.photosync.storageServer</string>
+	<string>com.loner.photosync.server</string>
 	<key>CFBundleName</key>
-	<string>Photo Storage Server</string>
+	<string>PhotoSync 存储端</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleInfoDictionaryVersion</key>

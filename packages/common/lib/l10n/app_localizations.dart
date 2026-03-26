@@ -68,6 +68,16 @@ abstract class AppLocalizations {
   String get noPhotosInRange;
   String uploadSummary(int done, int total, int failed);
 
+  // Upload screen — extra
+  String get photoPermissionRequired;
+  String get goToSettings;
+  String get connectServerFirst;
+  String get alreadyUploaded;
+  String photoCount(int n);
+  String get noPhotos;
+  String get sortNewestFirst;
+  String get sortOldestFirst;
+
   // ---------------------------------------------------------------------------
   // Cleanup screen
   // ---------------------------------------------------------------------------

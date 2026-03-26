@@ -91,4 +91,16 @@ class UploadRecordsDao {
       localAssetIds,
     );
   }
+
+  /// Returns the set of [local_asset_id] values that have been uploaded
+  /// (status = 'completed'). Used to restore badge state after app restart.
+  Future<Set<String>> getUploadedAssetIds() async {
+    final rows = await _db.query(
+      'upload_records',
+      columns: ['local_asset_id'],
+      where: 'upload_status = ?',
+      whereArgs: ['completed'],
+    );
+    return rows.map((r) => r['local_asset_id'] as String).toSet();
+  }
 }

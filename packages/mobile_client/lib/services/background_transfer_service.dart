@@ -10,7 +10,7 @@ import 'package:flutter/services.dart';
 ///   keeping the process alive while uploading.
 /// - Desktop: no-op (desktop has no background execution restrictions).
 class BackgroundTransferService {
-  static const _channel = MethodChannel('com.photosync/background_transfer');
+  static const _channel = MethodChannel('com.loner.photosync/background_transfer');
 
   static final BackgroundTransferService _instance =
       BackgroundTransferService._();

@@ -78,11 +78,12 @@ class MediaListProvider extends ChangeNotifier {
   }
 
   /// Reloads the current album from page 1 (e.g. after a new upload).
+  /// 保留旧数据直到新数据到达，避免闪烁。
   void reload() {
     if (_baseUrl != null && _deviceId != null && _albumName != null) {
       _currentPage = 1;
-      _items = [];
       _total = 0;
+      // 不清空 _items，让旧数据继续显示
       _fetch();
     }
   }
@@ -128,7 +129,8 @@ class MediaListProvider extends ChangeNotifier {
     if (_baseUrl == null || _deviceId == null || _albumName == null) return;
 
     _isLoading = true;
-    notifyListeners();
+    // 只在列表为空时通知 loading 状态，避免有数据时闪烁
+    if (_items.isEmpty) notifyListeners();
 
     try {
       final queryParams = <String, String>{

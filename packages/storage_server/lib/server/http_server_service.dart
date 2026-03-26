@@ -117,7 +117,7 @@ class HttpServerService {
   static const Map<String, String> _corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Range',
+    'Access-Control-Allow-Headers': 'Content-Type, Range, X-Device-Id, X-File-Name, X-Album-Name, X-Offset',
   };
 
   // ---------------------------------------------------------------------------
@@ -419,7 +419,7 @@ class HttpServerService {
 
       return _ok(UploadInitResponse(
         uploadedBytes: uploadedBytes,
-        chunkSize: 524288, // 512 KB
+        chunkSize: 4 * 1024 * 1024, // 4 MB
       ).toJson());
     } catch (e) {
       return _serverError(e.toString());
@@ -432,42 +432,46 @@ class HttpServerService {
 
   Future<Response> _uploadChunk(Request request) async {
     try {
-      // Parse multipart/form-data
       final contentType = request.headers['content-type'] ?? '';
-      if (!contentType.contains('multipart/form-data')) {
-        return _badRequest('Expected multipart/form-data');
+
+      String? deviceId, rawFileName, albumName, offsetStr;
+      List<int> chunkBytes;
+
+      if (contentType.contains('application/octet-stream')) {
+        // 新协议：元数据通过 header 传递，body 是纯二进制 chunk
+        deviceId = request.headers['x-device-id'];
+        final encodedFileName = request.headers['x-file-name'];
+        final encodedAlbumName = request.headers['x-album-name'];
+        rawFileName = encodedFileName != null ? Uri.decodeComponent(encodedFileName) : null;
+        albumName = encodedAlbumName != null ? Uri.decodeComponent(encodedAlbumName) : null;
+        offsetStr = request.headers['x-offset'];
+        chunkBytes = await request.read().expand((b) => b).toList();
+      } else if (contentType.contains('multipart/form-data')) {
+        // 兼容旧协议
+        final boundary = _extractBoundary(contentType);
+        if (boundary == null) return _badRequest('Missing boundary');
+        final bodyBytes = await request.read().expand((b) => b).toList();
+        final parts = _parseMultipart(bodyBytes, boundary);
+        deviceId = parts['device_id'] as String?;
+        rawFileName = parts['file_name'] as String?;
+        albumName = parts['album_name'] as String?;
+        offsetStr = parts['offset'] as String?;
+        chunkBytes = (parts['chunk_bytes'] as List<int>?) ?? [];
+      } else {
+        return _badRequest('Expected application/octet-stream or multipart/form-data');
       }
 
-      final boundary = _extractBoundary(contentType);
-      if (boundary == null) return _badRequest('Missing boundary');
-
-      final bodyBytes = await request.read().expand((b) => b).toList();
-      final parts = _parseMultipart(bodyBytes, boundary);
-
-      final deviceId = parts['device_id'];
-      final rawFileName = parts['file_name'];
-      final albumName = parts['album_name'];
-      final offsetStr = parts['offset'];
-      final chunkBytes = parts['chunk_bytes'] as List<int>?;
-
-      if (deviceId == null ||
-          rawFileName == null ||
-          albumName == null ||
-          offsetStr == null ||
-          chunkBytes == null) {
+      if (deviceId == null || rawFileName == null || albumName == null || offsetStr == null) {
         return _badRequest('Missing required fields');
       }
 
       final fileName = _safeFileName(rawFileName);
-
       final offset = int.tryParse(offsetStr);
       if (offset == null) return _badRequest('Invalid offset');
 
       // Determine temp file path.
-      final deviceDir =
-          '$_storagePath${Platform.pathSeparator}${deviceId}';
-      final tempPath =
-          '$deviceDir${Platform.pathSeparator}.tmp_${albumName}_${fileName}';
+      final deviceDir = '$_storagePath${Platform.pathSeparator}$deviceId';
+      final tempPath = '$deviceDir${Platform.pathSeparator}.tmp_${albumName}_$fileName';
 
       final tempFile = File(tempPath);
       await tempFile.parent.create(recursive: true);
@@ -537,14 +541,24 @@ class HttpServerService {
       await File(finalPath).parent.create(recursive: true);
       await tempFile.rename(finalPath);
 
-      // Insert media item (media_type will be resolved by DB layer from task).
+      // Read actual media_type and live_photo_pair_name from transfer_tasks.
+      final taskMeta = await _database.getTransferTaskMeta(
+        deviceId: req.deviceId,
+        fileName: safeFileName,
+        albumName: req.albumName,
+      );
+      final actualMediaType = taskMeta?.mediaType ?? MediaType.image;
+      final actualPairName = taskMeta?.livePhotoPairName;
+
+      // Insert media item with correct media type from transfer task.
       final mediaItem = await _database.insertMediaItem(
         deviceId: req.deviceId,
         fileName: safeFileName,
         albumName: req.albumName,
         filePath: finalPath,
         fileSize: req.totalSize,
-        mediaType: MediaType.image, // DB layer overrides from transfer_tasks
+        mediaType: actualMediaType,
+        livePhotoPairName: actualPairName,
       );
 
       // Mark transfer task complete.
@@ -556,6 +570,16 @@ class HttpServerService {
 
       // Notify UI immediately so the photo appears without waiting for thumbnail.
       onMediaInserted?.call(mediaItem);
+
+      // Notify connected mobile clients via WebSocket.
+      _wsServer.broadcastAll(WsMessage(
+        type: WsEventType.mediaInserted,
+        data: {
+          'media_id': mediaItem.id,
+          'album_name': req.albumName,
+          'device_id': req.deviceId,
+        },
+      ));
 
       // Enqueue thumbnail generation.
       _thumbnailQueue.enqueue(mediaItem.id);

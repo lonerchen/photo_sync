@@ -94,6 +94,13 @@ abstract interface class IServerDatabase {
     required String albumName,
   });
 
+  /// Returns media_type and live_photo_pair_name from the transfer task.
+  Future<({MediaType mediaType, String? livePhotoPairName})?> getTransferTaskMeta({
+    required String deviceId,
+    required String fileName,
+    required String albumName,
+  });
+
   /// Creates or updates a transfer task record.
   Future<void> upsertTransferTask({
     required String deviceId,

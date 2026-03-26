@@ -19,6 +19,9 @@ class UploadQueueProvider extends ChangeNotifier {
   int _failedCount = 0;
   double _bytesPerSecond = 0;
 
+  /// 上传完成时回调，传入 localAssetId，用于 UI 更新 badge。
+  void Function(String assetId)? onAssetUploaded;
+
   // For speed calculation
   int _lastBytesSnapshot = 0;
   DateTime _lastSpeedCheck = DateTime.now();
@@ -80,6 +83,58 @@ class UploadQueueProvider extends ChangeNotifier {
     _manager?.resume();
   }
 
+  /// 追加单张或少量任务到已有队列。
+  /// 如果队列不存在，则新建队列。
+  Future<void> enqueueTask({
+    required List<UploadTask> tasks,
+    required String baseUrl,
+    required String deviceId,
+    required Future<String> Function(UploadTask) resolveFilePath,
+  }) async {
+    // 注册 resolver（在 dispose 之前）
+    for (final t in tasks) {
+      _resolverMap[t.fileName] = resolveFilePath;
+    }
+
+    if (_manager == null) {
+      // 队列不存在，直接创建（不走 startUpload 避免 _disposeManager 清空 map）
+      await _disposeManager();
+      // 重新注册（_disposeManager 会清空，所以在它之后再写）
+      for (final t in tasks) {
+        _resolverMap[t.fileName] = resolveFilePath;
+      }
+
+      _totalCount = tasks.length;
+      _completedCount = 0;
+      _failedCount = 0;
+      _bytesPerSecond = 0;
+      _lastBytesSnapshot = 0;
+      _lastSpeedCheck = DateTime.now();
+      _status = QueueStatus.idle;
+      notifyListeners();
+
+      _manager = UploadQueueManager(
+        baseUrl: baseUrl,
+        deviceId: deviceId,
+        resolveFilePath: (task) {
+          final fn = _resolverMap[task.fileName];
+          return fn != null ? fn(task) : Future.value('');
+        },
+      );
+      _sub = _manager!.stateStream.listen(_onState);
+      await _bgService.begin();
+      await _manager!.addTasks(tasks);
+    } else {
+      // 队列已存在，追加任务
+      _totalCount += tasks.length;
+      await _manager!.addTasks(tasks);
+      notifyListeners();
+    }
+  }
+
+  // fileName → resolver，支持动态追加任务
+  final _resolverMap = <String, Future<String> Function(UploadTask)>{};
+
   // ---------------------------------------------------------------------------
   // Internal
   // ---------------------------------------------------------------------------
@@ -125,6 +180,10 @@ class UploadQueueProvider extends ChangeNotifier {
 
     final records = newlyDone.map((t) {
       _persisted.add('${t.serverId}:${t.fileName}');
+      // 通知 UI 该 asset 已上传完成
+      if (t.localAssetId.isNotEmpty) {
+        onAssetUploaded?.call(t.localAssetId);
+      }
       return {
         'server_id': t.serverId,
         'local_asset_id': t.localAssetId,
@@ -147,6 +206,7 @@ class UploadQueueProvider extends ChangeNotifier {
     _manager?.dispose();
     _manager = null;
     _persisted.clear();
+    _resolverMap.clear();
     await _bgService.end();
   }
 

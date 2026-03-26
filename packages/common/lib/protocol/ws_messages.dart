@@ -45,6 +45,10 @@ abstract final class WsEventType {
   /// data: `{"status": String, "progress": int?}`
   static const String serverStatus = 'server_status';
 
+  /// A new media item was inserted (upload completed).
+  /// data: `{"media_id": int, "album_name": String, "device_id": String}`
+  static const String mediaInserted = 'media_inserted';
+
   // -------------------------------------------------------------------------
   // Client → Server
   // -------------------------------------------------------------------------

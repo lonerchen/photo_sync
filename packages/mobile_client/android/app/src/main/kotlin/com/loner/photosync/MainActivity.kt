@@ -1,4 +1,4 @@
-package com.photosync.mobile_client
+package com.loner.photosync
 
 import android.content.Intent
 import android.os.Build
@@ -8,7 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val channelName = "com.photosync/background_transfer"
+    private val channelName = "com.loner.photosync/background_transfer"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)

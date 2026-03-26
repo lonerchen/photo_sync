@@ -36,7 +36,7 @@ class QueueState {
 /// - Live Photo pairs: HEIC is enqueued before MOV.
 /// - Batch dedup via POST /api/v1/upload/check-exists before starting.
 class UploadQueueManager {
-  static const int maxConcurrent = 3;
+  static const int maxConcurrent = 6;
 
   final String baseUrl;
   final String deviceId;
@@ -135,13 +135,13 @@ class UploadQueueManager {
   Future<void> _startWorker(UploadTask task) async {
     int _lastReported = 0;
     // 先占位，防止 await resolveFilePath 期间并发超限
+    // 每个 worker 独立 http.Client，各自维护独立 TCP 连接，避免串行排队
     _activeWorkers[task] = UploadWorker(
       baseUrl: baseUrl,
       deviceId: deviceId,
       filePath: '',
       task: task,
       onProgress: (_a, _b) {},
-      client: _client,
     );
     debugPrint('[Queue] resolving filePath for ${task.fileName}');
     final filePath = await resolveFilePath(task);
@@ -159,7 +159,6 @@ class UploadQueueManager {
         }
         _notify();
       },
-      client: _client,
     );
     _activeWorkers[task] = worker;
 

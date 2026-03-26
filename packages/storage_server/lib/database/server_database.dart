@@ -395,6 +395,20 @@ class ServerDatabase implements IServerDatabase {
   }
 
   @override
+  Future<({MediaType mediaType, String? livePhotoPairName})?> getTransferTaskMeta({
+    required String deviceId,
+    required String fileName,
+    required String albumName,
+  }) {
+    _assertOpen();
+    return _transferTasksDao.getTransferTaskMeta(
+      deviceId: deviceId,
+      fileName: fileName,
+      albumName: albumName,
+    );
+  }
+
+  @override
   Future<void> upsertTransferTask({
     required String deviceId,
     required String fileName,

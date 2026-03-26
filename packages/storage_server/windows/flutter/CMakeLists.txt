@@ -80,6 +80,13 @@ add_dependencies(flutter_wrapper_plugin flutter_assemble)
 
 # === Flutter tool backend ===
 # _phony_ is a non-existent file to force this command to always run.
+#
+# Some Windows environments accidentally propagate FLUTTER_ROOT with embedded
+# quotes (e.g. "\"C:/src/flutter\""), which breaks command execution as
+# `""C:`. Strip quotes defensively before passing it to `tool_backend.bat`.
+set(FLUTTER_ROOT_CLEAN "${FLUTTER_ROOT}")
+string(REPLACE "\"" "" FLUTTER_ROOT_CLEAN "${FLUTTER_ROOT_CLEAN}")
+
 add_custom_command(
   OUTPUT ${FLUTTER_LIBRARY} ${FLUTTER_LIBRARY_HEADERS}
     ${CPP_WRAPPER_SOURCES_CORE} ${CPP_WRAPPER_SOURCES_PLUGIN}
@@ -87,9 +94,9 @@ add_custom_command(
     ${EPHEMERAL_DIR}/generated_config.cmake
     _phony_
   COMMAND ${CMAKE_COMMAND} -E env
-    FLUTTER_ROOT="${FLUTTER_ROOT}"
+    FLUTTER_ROOT=${FLUTTER_ROOT_CLEAN}
     FLUTTER_TARGET_PLATFORM=${FLUTTER_TARGET_PLATFORM}
-    "${FLUTTER_ROOT}/packages/flutter_tools/bin/tool_backend.bat"
+    "${FLUTTER_ROOT_CLEAN}/packages/flutter_tools/bin/tool_backend.bat"
       windows-x64 $<CONFIG>
   VERBATIM
 )

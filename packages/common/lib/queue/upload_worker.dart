@@ -13,7 +13,7 @@ typedef ProgressCallback = void Function(int uploadedBytes, int totalBytes);
 
 /// Handles chunked upload of a single file with resume and retry support.
 class UploadWorker {
-  static const int chunkSize = 512 * 1024; // 512 KB
+  static const int chunkSize = 4 * 1024 * 1024; // 4 MB — 局域网大 chunk 减少 RTT
   static const int maxRetries = 3;
 
   final String baseUrl;
@@ -33,7 +33,9 @@ class UploadWorker {
     required this.task,
     this.onProgress,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.Client() {
+    // 每个 worker 独立 client，避免共享连接导致串行排队
+  }
 
   /// Signals the worker to stop after the current chunk completes.
   void pause() => _paused = true;
@@ -89,6 +91,7 @@ class UploadWorker {
         final remaining = totalSize - offset;
         final toRead = remaining < chunkSize ? remaining : chunkSize;
         final chunk = await raf.read(toRead);
+        if (chunk.isEmpty) break;
 
         debugPrint('[Worker] chunk #$chunkIndex offset=$offset size=${chunk.length} for ${task.fileName}');
         await _retryRequest(() => _postChunk(offset, chunk));
@@ -160,16 +163,17 @@ class UploadWorker {
 
   Future<void> _postChunk(int offset, List<int> chunk) async {
     final uri = Uri.parse('$baseUrl/api/v1/upload/chunk');
-    final request = http.MultipartRequest('POST', uri)
-      ..fields['device_id'] = deviceId
-      ..fields['file_name'] = task.fileName
-      ..fields['album_name'] = task.albumName
-      ..fields['offset'] = offset.toString()
-      ..files.add(
-        http.MultipartFile.fromBytes('chunk', chunk, filename: task.fileName),
-      );
-    final streamed = await _client.send(request);
-    final response = await http.Response.fromStream(streamed);
+    final response = await _client.post(
+      uri,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Device-Id': deviceId,
+        'X-File-Name': Uri.encodeComponent(task.fileName),
+        'X-Album-Name': Uri.encodeComponent(task.albumName),
+        'X-Offset': offset.toString(),
+      },
+      body: chunk,
+    );
     _assertSuccess(response);
     final body = jsonDecode(response.body) as Map<String, dynamic>;
     final apiResp = ApiResponse<void>.fromJson(body, null);

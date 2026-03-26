@@ -33,6 +33,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   StreamSubscription<WsMessage>? _wsSub;
   ViewMode _viewMode = ViewMode.grid;
   bool _restoreMode = false;
+  Timer? _refreshDebounce;
 
   @override
   void initState() {
@@ -70,6 +71,14 @@ class _BrowseScreenState extends State<BrowseScreen> {
         if (mediaId != null && thumbnailUrl != null) {
           context.read<MediaListProvider>().refreshItem(mediaId, thumbnailUrl);
         }
+      } else if (msg.type == WsEventType.mediaInserted) {
+        // 新照片上传完成，防抖 1 秒后刷新（避免批量上传时频繁请求）
+        _refreshDebounce?.cancel();
+        _refreshDebounce = Timer(const Duration(seconds: 1), () {
+          if (!mounted) return;
+          context.read<MediaListProvider>().reload();
+          context.read<AlbumProvider>().refreshAlbums();
+        });
       }
     });
   }
@@ -122,6 +131,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
   @override
   void dispose() {
     _wsSub?.cancel();
+    _refreshDebounce?.cancel();
     super.dispose();
   }
 
@@ -584,7 +594,9 @@ class _MediaPanel extends StatelessWidget {
                         ? Icons.arrow_downward
                         : Icons.arrow_upward,
                   ),
-                  tooltip: provider.sortOrder == 'desc' ? '最新在前' : '最旧在前',
+                  tooltip: provider.sortOrder == 'desc'
+                      ? AppLocalizations.of(context).sortNewestFirst
+                      : AppLocalizations.of(context).sortOldestFirst,
                   onPressed: () =>
                       context.read<MediaListProvider>().toggleSortOrder(),
                 ),
@@ -592,7 +604,18 @@ class _MediaPanel extends StatelessWidget {
             ],
           ),
           Expanded(
-            child: Center(child: Text(AppLocalizations.of(context).noPhotosInAlbum)),
+            child: RefreshIndicator(
+              onRefresh: () async => context.read<MediaListProvider>().reload(),
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: 200,
+                    child: Center(child: Text(AppLocalizations.of(context).noPhotosInAlbum)),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       );
@@ -616,7 +639,9 @@ class _MediaPanel extends StatelessWidget {
                       ? Icons.arrow_downward
                       : Icons.arrow_upward,
                 ),
-                tooltip: provider.sortOrder == 'desc' ? '最新在前' : '最旧在前',
+                tooltip: provider.sortOrder == 'desc'
+                    ? AppLocalizations.of(context).sortNewestFirst
+                    : AppLocalizations.of(context).sortOldestFirst,
                 onPressed: () =>
                     context.read<MediaListProvider>().toggleSortOrder(),
               ),
@@ -624,17 +649,20 @@ class _MediaPanel extends StatelessWidget {
           ],
         ),
         Expanded(
-          child: Consumer<RestoreProvider>(
-            builder: (context, restoreProvider, _) => MediaGridView(
-              items: mediaProvider.items,
-              hasMore: mediaProvider.hasMore,
-              onLoadMore: () => context.read<MediaListProvider>().loadMore(),
-              viewMode: viewMode,
-              onViewModeChanged: onViewModeChanged,
-              onItemTap: onItemTap,
-              onItemLongPress: onItemLongPress,
-              serverBaseUrl: baseUrl,
-              selectedIds: restoreMode ? restoreProvider.selectedIds : const {},
+          child: RefreshIndicator(
+            onRefresh: () async => context.read<MediaListProvider>().reload(),
+            child: Consumer<RestoreProvider>(
+              builder: (context, restoreProvider, _) => MediaGridView(
+                items: mediaProvider.items,
+                hasMore: mediaProvider.hasMore,
+                onLoadMore: () => context.read<MediaListProvider>().loadMore(),
+                viewMode: viewMode,
+                onViewModeChanged: onViewModeChanged,
+                onItemTap: onItemTap,
+                onItemLongPress: onItemLongPress,
+                serverBaseUrl: baseUrl,
+                selectedIds: restoreMode ? restoreProvider.selectedIds : const {},
+              ),
             ),
           ),
         ),

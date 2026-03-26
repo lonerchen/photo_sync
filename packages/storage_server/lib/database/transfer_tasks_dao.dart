@@ -97,6 +97,27 @@ class TransferTasksDao {
     return (rows.first['uploaded_bytes'] as int?) ?? 0;
   }
 
+  /// Returns media_type and live_photo_pair_name from the transfer task.
+  Future<({MediaType mediaType, String? livePhotoPairName})?> getTransferTaskMeta({
+    required String deviceId,
+    required String fileName,
+    required String albumName,
+  }) async {
+    final rows = await _db.query(
+      'transfer_tasks',
+      columns: ['media_type', 'live_photo_pair_name'],
+      where: 'device_id = ? AND file_name = ? AND album_name = ?',
+      whereArgs: [deviceId, fileName, albumName],
+      orderBy: 'created_at DESC',
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return (
+      mediaType: MediaType.fromJson(rows.first['media_type'] as String),
+      livePhotoPairName: rows.first['live_photo_pair_name'] as String?,
+    );
+  }
+
   // ---------------------------------------------------------------------------
   // Updates
   // ---------------------------------------------------------------------------

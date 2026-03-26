@@ -5,7 +5,9 @@
 	<key>CFBundleIdentifier</key>
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
-	<string>$(FLUTTER_BUILD_NAME)</string>
+	<string>PhotoSync</string>
+	<key>CFBundleDisplayName</key>
+	<string>PhotoSync 照片搬家</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>CFBundleExecutable</key>

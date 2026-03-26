@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:common/common.dart';
@@ -20,11 +21,20 @@ class MainShell extends StatefulWidget {
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
   String _localIp = '...';
+  Timer? _ipTimer;
 
   @override
   void initState() {
     super.initState();
     _loadIp();
+    // 每 5 秒检测一次 IP 变化，桌面端没有网络变化回调，轮询是最可靠的方式
+    _ipTimer = Timer.periodic(const Duration(seconds: 5), (_) => _loadIp());
+  }
+
+  @override
+  void dispose() {
+    _ipTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _loadIp() async {
@@ -82,7 +92,8 @@ class _MainShellState extends State<MainShell> {
       body: Column(
         children: [
           Container(
-            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            // Use `surface` for broad Flutter SDK compatibility.
+            color: Theme.of(context).colorScheme.surface,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: Row(
               children: [

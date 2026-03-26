@@ -1,4 +1,4 @@
-# Photo Storage Cleaner
+# PhotoSync 照片搬家
 
 手机照片备份与清理工具 —— 将手机照片无损备份到本地存储端，确认备份后安全清理手机空间。
 

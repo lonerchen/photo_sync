@@ -1,4 +1,4 @@
-package com.photosync.mobile_client
+package com.loner.photosync
 
 import android.app.Notification
 import android.app.NotificationChannel
@@ -56,7 +56,7 @@ class UploadForegroundService : Service() {
 
     private fun buildNotification(text: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Photo Storage Cleaner")
+            .setContentTitle("PhotoSync 照片搬家")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_upload)
             .setOngoing(true)

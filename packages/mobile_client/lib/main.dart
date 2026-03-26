@@ -41,7 +41,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => RestoreProvider()),
       ],
       child: MaterialApp(
-        title: 'Photo Storage Cleaner',
+        title: 'PhotoSync 照片搬家',
         localizationsDelegates: const [
           AppLocalizations.delegate,
           GlobalMaterialLocalizations.delegate,

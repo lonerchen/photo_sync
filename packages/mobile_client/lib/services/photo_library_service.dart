@@ -31,6 +31,35 @@ class PhotoLibraryService {
     }).toList();
   }
 
+  /// Returns a page of assets in [album], sorted by creation date descending.
+  /// [page] is 0-indexed. Returns empty list when no more data.
+  Future<List<AssetEntity>> getAssetsPage(
+    AssetPathEntity album, {
+    required int page,
+    int pageSize = 80,
+    DateTimeRange? dateRange,
+  }) async {
+    if (dateRange != null) {
+      // photo_manager 不支持按日期分页，需要先全量过滤再手动分页
+      final all = await getAssets(album, dateRange: dateRange);
+      final start = page * pageSize;
+      if (start >= all.length) return [];
+      final end = (start + pageSize).clamp(0, all.length);
+      return all.sublist(start, end);
+    }
+    return album.getAssetListPaged(page: page, size: pageSize);
+  }
+
+  /// Returns total asset count in [album], optionally filtered by [dateRange].
+  Future<int> getAssetCount(
+    AssetPathEntity album, {
+    DateTimeRange? dateRange,
+  }) async {
+    if (dateRange == null) return album.assetCountAsync;
+    final all = await getAssets(album, dateRange: dateRange);
+    return all.length;
+  }
+
   /// Returns the local file path for [asset], or null if unavailable.
   Future<String?> getAssetFilePath(AssetEntity asset) async {
     final file = await asset.originFile;

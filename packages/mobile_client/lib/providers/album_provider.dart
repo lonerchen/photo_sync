@@ -11,6 +11,9 @@ class AlbumProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
 
+  String? _baseUrl;
+  String? _deviceId;
+
   List<Album> get albums => _albums;
   Album? get selectedAlbum => _selectedAlbum;
   bool get isLoading => _isLoading;
@@ -18,6 +21,8 @@ class AlbumProvider extends ChangeNotifier {
 
   /// Fetches albums from `GET /api/v1/devices/{deviceId}/albums`.
   Future<void> loadAlbums(String baseUrl, String deviceId) async {
+    _baseUrl = baseUrl;
+    _deviceId = deviceId;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -51,6 +56,13 @@ class AlbumProvider extends ChangeNotifier {
   void selectAlbum(Album album) {
     _selectedAlbum = album;
     notifyListeners();
+  }
+
+  /// Re-fetches albums using the last known baseUrl/deviceId.
+  void refreshAlbums() {
+    if (_baseUrl != null && _deviceId != null) {
+      loadAlbums(_baseUrl!, _deviceId!);
+    }
   }
 
   /// Clears the current state (e.g. on disconnect).

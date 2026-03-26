@@ -20,7 +20,7 @@ import UIKit
 
     // ── Live Photo channel ──────────────────────────────────────────────────
     let livePhotoChannel = FlutterMethodChannel(
-      name: "com.photosync/live_photo",
+      name: "com.loner.photosync/live_photo",
       binaryMessenger: controller.binaryMessenger
     )
     livePhotoChannel.setMethodCallHandler { [weak self] call, result in
@@ -41,7 +41,7 @@ import UIKit
 
     // ── Background transfer channel ─────────────────────────────────────────
     let bgChannel = FlutterMethodChannel(
-      name: "com.photosync/background_transfer",
+      name: "com.loner.photosync/background_transfer",
       binaryMessenger: controller.binaryMessenger
     )
     bgChannel.setMethodCallHandler { [weak self] call, result in
