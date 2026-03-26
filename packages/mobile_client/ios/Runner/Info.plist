@@ -38,11 +38,11 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>This app needs access to your photo library to upload and manage photos.</string>
+	<string>PhotoSync needs access to your photo library to select and upload photos to your local storage server for backup.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>This app needs permission to save restored photos to your photo library.</string>
+	<string>PhotoSync needs permission to save restored photos back to your photo library from your local storage server.</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>This app uses local network to discover and connect to your storage server.</string>
+	<string>PhotoSync uses your local Wi-Fi network to discover and connect to your PhotoSync Storage server for photo backup and browsing.</string>
 	<key>NSBonjourServices</key>
 	<array>
 		<string>_photosync._tcp</string>
@@ -54,6 +54,12 @@
 		<string>fetch</string>
 		<string>processing</string>
 	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.loner.photosync.upload</string>
+	</array>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

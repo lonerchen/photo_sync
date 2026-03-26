@@ -1,3 +1,4 @@
+import BackgroundTasks
 import Flutter
 import Photos
 import UIKit
@@ -7,12 +8,23 @@ import UIKit
 
   // Background task identifier for upload continuation
   private var bgTaskId: UIBackgroundTaskIdentifier = .invalid
+  private static let bgUploadTaskId = "com.loner.photosync.upload"
 
   override func application(
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     GeneratedPluginRegistrant.register(with: self)
+
+    // ── Register BGTask identifier (required when UIBackgroundModes includes 'processing') ──
+    BGTaskScheduler.shared.register(
+      forTaskWithIdentifier: AppDelegate.bgUploadTaskId,
+      using: nil
+    ) { task in
+      // We use UIBackgroundTask for actual upload continuation, not BGProcessingTask.
+      // This registration satisfies the BGTaskSchedulerPermittedIdentifiers requirement.
+      task.setTaskCompleted(success: true)
+    }
 
     guard let controller = window?.rootViewController as? FlutterViewController else {
       return super.application(application, didFinishLaunchingWithOptions: launchOptions)
