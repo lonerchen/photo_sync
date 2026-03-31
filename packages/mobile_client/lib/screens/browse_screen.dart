@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 
 import '../database/mobile_database.dart';
 import '../providers/album_provider.dart';
+import '../providers/local_network_permission_provider.dart';
 import '../providers/media_list_provider.dart';
 import '../providers/restore_provider.dart';
 import '../services/connection_service.dart';
@@ -45,6 +46,7 @@ class _BrowseScreenState extends State<BrowseScreen> {
 
   Future<void> _init() async {
     _deviceId = await DeviceIdentityService.instance.getDeviceId();
+    await context.read<LocalNetworkPermissionProvider>().ensureRequested();
     final connectionService = context.read<ConnectionService>();
     final discoveryService = context.read<DiscoveryService>();
     _subscribeToWsMessages(connectionService);
@@ -111,7 +113,17 @@ class _BrowseScreenState extends State<BrowseScreen> {
     final server = context.read<ConnectionService>().currentServer;
     if (server == null) return;
     final baseUrl = 'http://${server.ipAddress}:${server.port}';
-    MediaViewer.show(context, item: item, serverBaseUrl: baseUrl);
+    MediaViewer.show(
+      context,
+      item: item,
+      serverBaseUrl: baseUrl,
+      onDownload: (target) => _downloadSingleMedia(baseUrl, target),
+    );
+  }
+
+  Future<void> _downloadSingleMedia(String baseUrl, MediaItem item) async {
+    final allItems = context.read<MediaListProvider>().items;
+    await context.read<RestoreProvider>().restoreSingle(baseUrl, item, allItems);
   }
 
   void _onItemLongPress(MediaItem item) {
@@ -290,6 +302,7 @@ class _NotConnectedPageState extends State<_NotConnectedPage> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final discoveryService = context.watch<DiscoveryService>();
+    final localNetworkPermission = context.watch<LocalNetworkPermissionProvider>();
     final servers = discoveryService.servers;
 
     return Scaffold(
@@ -306,6 +319,38 @@ class _NotConnectedPageState extends State<_NotConnectedPage> {
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 24),
+              if (localNetworkPermission.isDenied) ...[
+                Card(
+                  color: Colors.amber.shade100,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          '未开启本地网络权限，无法发现和连接存储端。',
+                          style: TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => localNetworkPermission.openSettings(),
+                              child: const Text('去设置开启'),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              onPressed: () => localNetworkPermission.requestNow(),
+                              child: const Text('已开启，重新检测'),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
 
               if (servers.isNotEmpty) ...[
                 Text(l.discoveredServers, style: const TextStyle(fontWeight: FontWeight.w600)),

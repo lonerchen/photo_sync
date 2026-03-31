@@ -56,10 +56,22 @@ class DiscoveryService extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> _startMdnsDiscovery() async {
-    await _runMdnsScan();
+    await _scanMdnsSafely();
+    // iOS 上 mDNS 主要用于首次触发本地网络权限，不做周期轮询，避免在弱网/
+    // 无路由场景反复触发 socket 异常日志；后续依赖 UDP 广播持续发现。
+    if (Platform.isIOS) return;
     _mdnsTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      if (_running) _runMdnsScan();
+      if (!_running) return;
+      unawaited(_scanMdnsSafely());
     });
+  }
+
+  Future<void> _scanMdnsSafely() async {
+    try {
+      await _runMdnsScan();
+    } catch (_) {
+      // Never bubble mDNS errors to upper async zones.
+    }
   }
 
   Future<void> _runMdnsScan() async {

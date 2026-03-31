@@ -104,6 +104,34 @@ class RestoreProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Restores a single media item (used by quick-download button in viewer).
+  Future<void> restoreSingle(
+    String serverBaseUrl,
+    MediaItem item,
+    List<MediaItem> allItems,
+  ) async {
+    _status = RestoreStatus.restoring;
+    _restoredCount = 0;
+    _totalCount = 1;
+    _failedFiles.clear();
+    _errorMessage = null;
+    notifyListeners();
+
+    final tmpDir = await getTemporaryDirectory();
+    try {
+      await _restoreItem(item, allItems, serverBaseUrl, tmpDir.path);
+      _restoredCount = 1;
+      _status = RestoreStatus.done;
+      notifyListeners();
+    } catch (e) {
+      _failedFiles.add(item.fileName);
+      _errorMessage = e.toString();
+      _status = RestoreStatus.error;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
   Future<void> _restoreItem(
     MediaItem item,
     List<MediaItem> allItems,

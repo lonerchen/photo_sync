@@ -1,5 +1,6 @@
 import BackgroundTasks
 import Flutter
+import Network
 import Photos
 import UIKit
 
@@ -9,6 +10,10 @@ import UIKit
   // Background task identifier for upload continuation
   private var bgTaskId: UIBackgroundTaskIdentifier = .invalid
   private static let bgUploadTaskId = "com.loner.photosync.upload"
+  private var localNetworkBrowser: NWBrowser?
+  private var localNetworkService: NetService?
+  private var localNetworkTimer: Timer?
+  private var localNetworkPendingResult: FlutterResult?
 
   override func application(
     _ application: UIApplication,
@@ -69,6 +74,26 @@ import UIKit
       }
     }
 
+    // ── Local network permission channel ────────────────────────────────────
+    let localNetworkChannel = FlutterMethodChannel(
+      name: "com.loner.photosync/local_network",
+      binaryMessenger: controller.binaryMessenger
+    )
+    localNetworkChannel.setMethodCallHandler { [weak self] call, result in
+      guard let self else { return }
+      switch call.method {
+      case "requestPermission":
+        self.requestLocalNetworkPermission(result: result)
+      case "openSettings":
+        if let url = URL(string: UIApplication.openSettingsURLString) {
+          UIApplication.shared.open(url, options: [:], completionHandler: nil)
+        }
+        result(nil)
+      default:
+        result(FlutterMethodNotImplemented)
+      }
+    }
+
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
   }
 
@@ -110,6 +135,79 @@ import UIKit
           result(FlutterError(code: "SAVE_FAILED", message: error?.localizedDescription ?? "Unknown error", details: nil))
         }
       }
+    }
+  }
+
+  // MARK: - Local Network permission
+
+  private func requestLocalNetworkPermission(result: @escaping FlutterResult) {
+    if #available(iOS 14.0, *) {
+      if localNetworkPendingResult != nil {
+        result("requesting")
+        return
+      }
+      localNetworkPendingResult = result
+
+      let params = NWParameters()
+      params.includePeerToPeer = true
+
+      let browser = NWBrowser(
+        for: .bonjour(type: "_photosync._tcp", domain: nil),
+        using: params
+      )
+      localNetworkBrowser = browser
+
+      browser.stateUpdateHandler = { [weak self] state in
+        guard let self else { return }
+        switch state {
+        case .ready:
+          self.finishLocalNetworkPermission(status: "granted")
+        case .waiting(let error):
+          if case .posix(let code) = error, code == .EPERM {
+            self.finishLocalNetworkPermission(status: "denied")
+          }
+        case .failed:
+          self.finishLocalNetworkPermission(status: "unknown")
+        default:
+          break
+        }
+      }
+
+      browser.browseResultsChangedHandler = { [weak self] _, _ in
+        self?.finishLocalNetworkPermission(status: "granted")
+      }
+
+      let service = NetService(
+        domain: "local.",
+        type: "_photosync._tcp.",
+        name: "PhotoSyncProbe-\(UUID().uuidString)",
+        port: 9
+      )
+      localNetworkService = service
+      service.publish(options: .listenForConnections)
+
+      browser.start(queue: .main)
+
+      localNetworkTimer?.invalidate()
+      localNetworkTimer = Timer.scheduledTimer(withTimeInterval: 8, repeats: false) { [weak self] _ in
+        self?.finishLocalNetworkPermission(status: "unknown")
+      }
+    } else {
+      result("granted")
+    }
+  }
+
+  private func finishLocalNetworkPermission(status: String) {
+    localNetworkTimer?.invalidate()
+    localNetworkTimer = nil
+    localNetworkBrowser?.cancel()
+    localNetworkBrowser = nil
+    localNetworkService?.stop()
+    localNetworkService = nil
+
+    if let callback = localNetworkPendingResult {
+      callback(status)
+      localNetworkPendingResult = nil
     }
   }
 }

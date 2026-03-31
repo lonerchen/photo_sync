@@ -112,7 +112,9 @@ class UploadWorker {
     String? thumbnailBase64;
     final isLiveHeic = task.mediaType == MediaType.livePhoto &&
         task.fileName.toLowerCase().endsWith('.heic');
-    if (isLiveHeic && resolveThumbnailBytes != null) {
+    final shouldUploadThumbnail =
+        isLiveHeic || task.mediaType == MediaType.video;
+    if (shouldUploadThumbnail && resolveThumbnailBytes != null) {
       final thumbBytes = await resolveThumbnailBytes!(task);
       if (thumbBytes != null && thumbBytes.isNotEmpty) {
         thumbnailBase64 = base64Encode(thumbBytes);

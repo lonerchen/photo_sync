@@ -648,10 +648,8 @@ class HttpServerService {
         },
       ));
 
-      final isLiveHeic = mediaItem.mediaType == MediaType.livePhoto &&
-          safeFileName.toLowerCase().endsWith('.heic');
       var thumbnailInjected = false;
-      if (isLiveHeic && req.thumbnailBase64 != null) {
+      if (req.thumbnailBase64 != null) {
         try {
           final bytes = base64Decode(req.thumbnailBase64!);
           final thumbnailPath = p.join(

@@ -216,15 +216,8 @@ class _UploadScreenState extends State<UploadScreen> {
         }
       },
       resolveThumbnailBytes: (task) async {
-        final isLiveHeic = task.mediaType == MediaType.livePhoto &&
-            task.fileName.toLowerCase().endsWith('.heic');
-        if (!isLiveHeic) return null;
         final asset = assetMap[task.fileName];
-        if (asset == null) return null;
-        return asset.thumbnailDataWithSize(
-          const ThumbnailSize(1080, 1080),
-          quality: 90,
-        );
+        return _resolveUploadThumbnail(task, asset);
       },
     );
   }
@@ -313,16 +306,26 @@ class _UploadScreenState extends State<UploadScreen> {
         }
       },
       resolveThumbnailBytes: (task) async {
-        final isLiveHeic = task.mediaType == MediaType.livePhoto &&
-            task.fileName.toLowerCase().endsWith('.heic');
-        if (!isLiveHeic) return null;
         final a = assetMap[task.fileName];
-        if (a == null) return null;
-        return a.thumbnailDataWithSize(
-          const ThumbnailSize(1080, 1080),
-          quality: 90,
-        );
+        return _resolveUploadThumbnail(task, a);
       },
+    );
+  }
+
+  Future<Uint8List?> _resolveUploadThumbnail(
+    UploadTask task,
+    AssetEntity? asset,
+  ) async {
+    if (asset == null) return null;
+
+    final isLiveHeic = task.mediaType == MediaType.livePhoto &&
+        task.fileName.toLowerCase().endsWith('.heic');
+    final isVideo = task.mediaType == MediaType.video;
+    if (!isLiveHeic && !isVideo) return null;
+
+    return asset.thumbnailDataWithSize(
+      const ThumbnailSize(1080, 1080),
+      quality: 90,
     );
   }
 

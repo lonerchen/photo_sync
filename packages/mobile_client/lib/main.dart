@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'database/mobile_database.dart';
 import 'providers/album_provider.dart';
 import 'providers/cleanup_provider.dart';
+import 'providers/local_network_permission_provider.dart';
 import 'providers/media_list_provider.dart';
 import 'providers/restore_provider.dart';
 import 'providers/upload_queue_provider.dart';
@@ -33,6 +34,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => ConnectionService()),
+        ChangeNotifierProvider(create: (_) => LocalNetworkPermissionProvider()),
         ChangeNotifierProvider(create: (_) => DiscoveryService()),
         ChangeNotifierProvider(create: (_) => AlbumProvider()),
         ChangeNotifierProvider(create: (_) => MediaListProvider()),
