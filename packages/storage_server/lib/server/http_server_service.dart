@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:common/common.dart';
+import 'package:path/path.dart' as p;
 import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as shelf_io;
 import 'package:shelf_router/shelf_router.dart';
@@ -99,6 +100,7 @@ class HttpServerService {
     // Thumbnail & original
     router.get('/api/v1/media/<mediaId>/thumbnail', _getThumbnail);
     router.get('/api/v1/media/<mediaId>/original', _getOriginal);
+    router.get('/api/v1/media/<mediaId>/pair', _getLivePhotoPair);
 
     // Upload
     router.post('/api/v1/upload/check-exists', _checkExists);
@@ -314,6 +316,18 @@ class HttpServerService {
               'attachment; filename="${item.fileName}"',
         },
       );
+    } catch (e) {
+      return _serverError(e.toString());
+    }
+  }
+
+  Future<Response> _getLivePhotoPair(Request request, String mediaId) async {
+    try {
+      final id = int.tryParse(mediaId);
+      if (id == null) return _badRequest('Invalid media_id');
+      final pair = await _database.getPairedLivePhotoItem(id);
+      if (pair == null) return _notFound('Live Photo pair not found');
+      return _ok(pair.toJson());
     } catch (e) {
       return _serverError(e.toString());
     }
@@ -634,8 +648,36 @@ class HttpServerService {
         },
       ));
 
-      // Enqueue thumbnail generation.
-      _thumbnailQueue.enqueue(mediaItem.id);
+      final isLiveHeic = mediaItem.mediaType == MediaType.livePhoto &&
+          safeFileName.toLowerCase().endsWith('.heic');
+      var thumbnailInjected = false;
+      if (isLiveHeic && req.thumbnailBase64 != null) {
+        try {
+          final bytes = base64Decode(req.thumbnailBase64!);
+          final thumbnailPath = p.join(
+            storagePath,
+            '.thumbnails',
+            mediaItem.deviceId,
+            mediaItem.albumName,
+            '${p.basenameWithoutExtension(mediaItem.fileName)}.jpg',
+          );
+          await File(thumbnailPath).parent.create(recursive: true);
+          await File(thumbnailPath).writeAsBytes(bytes, flush: true);
+          await _database.updateThumbnail(
+            mediaId: mediaItem.id,
+            thumbnailPath: thumbnailPath,
+            thumbnailStatus: 'ready',
+          );
+          thumbnailInjected = true;
+        } catch (_) {
+          thumbnailInjected = false;
+        }
+      }
+
+      if (!thumbnailInjected) {
+        // Enqueue thumbnail generation.
+        _thumbnailQueue.enqueue(mediaItem.id);
+      }
 
       return _ok(mediaItem.toJson());
     } catch (e) {

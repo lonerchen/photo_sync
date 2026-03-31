@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:common/common.dart';
@@ -179,10 +180,19 @@ class RestoreProvider extends ChangeNotifier {
       return;
     }
 
-    final pairItem = allItems.firstWhere(
-      (e) => e.fileName == pairName,
-      orElse: () => throw Exception('Live Photo pair not found: $pairName'),
-    );
+    MediaItem? pairItem;
+    for (final e in allItems) {
+      if (e.fileName == pairName &&
+          e.deviceId == item.deviceId &&
+          e.albumName == item.albumName) {
+        pairItem = e;
+        break;
+      }
+    }
+    pairItem ??= await _fetchPairFromServer(item.id, baseUrl);
+    if (pairItem == null) {
+      throw Exception('Live Photo pair not found: $pairName');
+    }
 
     final movPath = '$tmpDir/${pairItem.id}_${pairItem.fileName}';
     await _downloadFile(
@@ -210,6 +220,18 @@ class RestoreProvider extends ChangeNotifier {
       throw Exception('Download failed: HTTP ${response.statusCode}');
     }
     await File(destPath).writeAsBytes(response.bodyBytes);
+  }
+
+  Future<MediaItem?> _fetchPairFromServer(int mediaId, String baseUrl) async {
+    final uri = Uri.parse('$baseUrl/api/v1/media/$mediaId/pair');
+    final response = await http.get(uri);
+    if (response.statusCode != 200) return null;
+    final json = jsonDecode(response.body) as Map<String, dynamic>;
+    final api = ApiResponse.fromJson(
+      json,
+      (d) => MediaItem.fromJson(d as Map<String, dynamic>),
+    );
+    return api.data;
   }
 
   void _deleteSilently(String path) {

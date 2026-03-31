@@ -48,7 +48,7 @@ class MediaViewer extends StatelessWidget {
         children: [
           item.mediaType == MediaType.video
               ? _buildVideoPlaceholder(context)
-              : _buildPhotoView(),
+              : _buildPhotoView(useThumbnailAsSource: item.mediaType == MediaType.livePhoto),
           _buildCloseButton(context),
           _buildBottomOverlay(),
           if (item.mediaType == MediaType.livePhoto) _buildLiveBadge(),
@@ -134,9 +134,10 @@ class MediaViewer extends StatelessWidget {
 
   // ── Image ──────────────────────────────────────────────────────────────────
 
-  Widget _buildPhotoView() {
+  Widget _buildPhotoView({bool useThumbnailAsSource = false}) {
+    final imageUrl = useThumbnailAsSource ? _thumbnailUrl : _originalUrl;
     return PhotoView(
-      imageProvider: CachedNetworkImageProvider(_originalUrl),
+      imageProvider: CachedNetworkImageProvider(imageUrl),
       minScale: PhotoViewComputedScale.contained,
       maxScale: PhotoViewComputedScale.covered * 4,
       backgroundDecoration: const BoxDecoration(color: Colors.black),

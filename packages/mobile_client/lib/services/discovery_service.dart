@@ -67,18 +67,15 @@ class DiscoveryService extends ChangeNotifier {
     _mdnsClient = MDnsClient();
     try {
       await _mdnsClient!.start();
-      await for (final PtrResourceRecord ptr in _mdnsClient!
-          .lookup<PtrResourceRecord>(
-              ResourceRecordQuery.serverPointer(_mdnsServiceType))
-          .handleError((_) {})) {
-        await for (final SrvResourceRecord srv in _mdnsClient!
-            .lookup<SrvResourceRecord>(
-                ResourceRecordQuery.service(ptr.domainName))
-            .handleError((_) {})) {
-          await for (final IPAddressResourceRecord ip in _mdnsClient!
-              .lookup<IPAddressResourceRecord>(
-                  ResourceRecordQuery.addressIPv4(srv.target))
-              .handleError((_) {})) {
+      await for (final PtrResourceRecord ptr in _safeLookup<PtrResourceRecord>(
+        ResourceRecordQuery.serverPointer(_mdnsServiceType),
+      )) {
+        await for (final SrvResourceRecord srv in _safeLookup<SrvResourceRecord>(
+          ResourceRecordQuery.service(ptr.domainName),
+        )) {
+          await for (final IPAddressResourceRecord ip in _safeLookup<IPAddressResourceRecord>(
+            ResourceRecordQuery.addressIPv4(srv.target),
+          )) {
             final serverId = ptr.domainName;
             final serverName = ptr.domainName.split('.').first;
             _addOrUpdate(ServerInfo(
@@ -95,6 +92,19 @@ class DiscoveryService extends ChangeNotifier {
     } finally {
       _mdnsClient?.stop();
       _mdnsClient = null;
+    }
+  }
+
+  Stream<T> _safeLookup<T extends ResourceRecord>(ResourceRecordQuery query) {
+    try {
+      final client = _mdnsClient;
+      if (client == null) return const Stream.empty();
+      return client.lookup<T>(query).handleError((Object _, StackTrace __) {
+        // Ignore mDNS lookup errors and continue using UDP fallback.
+      });
+    } catch (_) {
+      // On some iOS network states lookup() can throw synchronously.
+      return const Stream.empty();
     }
   }
 

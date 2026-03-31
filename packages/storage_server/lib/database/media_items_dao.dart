@@ -7,6 +7,34 @@ class MediaItemsDao {
 
   MediaItemsDao(this._db);
 
+  static const String _livePhotoDisplayFilter = '''
+    NOT (
+      media_type = 'live_photo'
+      AND LOWER(file_name) LIKE '%.mov'
+      AND live_photo_pair_name IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM media_items lp
+        WHERE lp.device_id = media_items.device_id
+          AND lp.album_name = media_items.album_name
+          AND lp.file_name = media_items.live_photo_pair_name
+      )
+    )
+  ''';
+
+  static const String _livePhotoDisplayFilterMi = '''
+    NOT (
+      mi.media_type = 'live_photo'
+      AND LOWER(mi.file_name) LIKE '%.mov'
+      AND mi.live_photo_pair_name IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM media_items lp
+        WHERE lp.device_id = mi.device_id
+          AND lp.album_name = mi.album_name
+          AND lp.file_name = mi.live_photo_pair_name
+      )
+    )
+  ''';
+
   // ---------------------------------------------------------------------------
   // Insert
   // ---------------------------------------------------------------------------
@@ -53,6 +81,23 @@ class MediaItemsDao {
     return _rowToMediaItem(rows.first);
   }
 
+  Future<MediaItem?> getPairedLivePhotoItem(int mediaId) async {
+    final current = await getMediaItem(mediaId);
+    if (current == null || current.livePhotoPairName == null) return null;
+    final rows = await _db.query(
+      'media_items',
+      where: 'device_id = ? AND album_name = ? AND file_name = ?',
+      whereArgs: [
+        current.deviceId,
+        current.albumName,
+        current.livePhotoPairName!,
+      ],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    return _rowToMediaItem(rows.first);
+  }
+
   /// Paginated query with optional time-range filter and sort order.
   Future<({int total, List<MediaItem> items})> getMediaItems({
     required String deviceId,
@@ -63,7 +108,9 @@ class MediaItemsDao {
     int? endDate,
     String sortOrder = 'desc',
   }) async {
-    final where = StringBuffer('device_id = ? AND album_name = ?');
+    final where = StringBuffer(
+      'device_id = ? AND album_name = ? AND $_livePhotoDisplayFilter',
+    );
     final args = <dynamic>[deviceId, albumName];
 
     if (startDate != null) {
@@ -113,6 +160,7 @@ class MediaItemsDao {
               LIMIT 1) AS cover_thumbnail_path
       FROM media_items mi
       WHERE device_id = ?
+        AND $_livePhotoDisplayFilterMi
       GROUP BY album_name
       ORDER BY album_name
     ''', [deviceId]);

@@ -448,6 +448,12 @@ class ServerDatabase implements IServerDatabase {
   }
 
   @override
+  Future<MediaItem?> getPairedLivePhotoItem(int mediaId) {
+    _assertOpen();
+    return _mediaItemsDao.getPairedLivePhotoItem(mediaId);
+  }
+
+  @override
   Future<List<String>> getExistingFileNames({
     required String deviceId,
     required String albumName,

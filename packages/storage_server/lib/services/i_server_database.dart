@@ -62,6 +62,9 @@ abstract interface class IServerDatabase {
   /// Returns the [MediaItem] with [mediaId], or null if not found.
   Future<MediaItem?> getMediaItem(int mediaId);
 
+  /// Returns the paired item for a Live Photo media record.
+  Future<MediaItem?> getPairedLivePhotoItem(int mediaId);
+
   /// Checks which of [fileNames] already exist in [albumName] for [deviceId].
   Future<List<String>> getExistingFileNames({
     required String deviceId,

@@ -222,8 +222,8 @@ class _UploadScreenState extends State<UploadScreen> {
         final asset = assetMap[task.fileName];
         if (asset == null) return null;
         return asset.thumbnailDataWithSize(
-          const ThumbnailSize(300, 300),
-          quality: 80,
+          const ThumbnailSize(1080, 1080),
+          quality: 90,
         );
       },
     );
@@ -319,8 +319,8 @@ class _UploadScreenState extends State<UploadScreen> {
         final a = assetMap[task.fileName];
         if (a == null) return null;
         return a.thumbnailDataWithSize(
-          const ThumbnailSize(300, 300),
-          quality: 80,
+          const ThumbnailSize(1080, 1080),
+          quality: 90,
         );
       },
     );
