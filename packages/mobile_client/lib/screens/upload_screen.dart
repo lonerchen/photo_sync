@@ -215,6 +215,17 @@ class _UploadScreenState extends State<UploadScreen> {
           return await _photoService.getAssetFilePath(asset) ?? '';
         }
       },
+      resolveThumbnailBytes: (task) async {
+        final isLiveHeic = task.mediaType == MediaType.livePhoto &&
+            task.fileName.toLowerCase().endsWith('.heic');
+        if (!isLiveHeic) return null;
+        final asset = assetMap[task.fileName];
+        if (asset == null) return null;
+        return asset.thumbnailDataWithSize(
+          const ThumbnailSize(300, 300),
+          quality: 80,
+        );
+      },
     );
   }
 
@@ -300,6 +311,17 @@ class _UploadScreenState extends State<UploadScreen> {
         } else {
           return await _photoService.getAssetFilePath(a) ?? '';
         }
+      },
+      resolveThumbnailBytes: (task) async {
+        final isLiveHeic = task.mediaType == MediaType.livePhoto &&
+            task.fileName.toLowerCase().endsWith('.heic');
+        if (!isLiveHeic) return null;
+        final a = assetMap[task.fileName];
+        if (a == null) return null;
+        return a.thumbnailDataWithSize(
+          const ThumbnailSize(300, 300),
+          quality: 80,
+        );
       },
     );
   }

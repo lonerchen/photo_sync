@@ -30,9 +30,12 @@ class DiscoveryService extends ChangeNotifier {
     _running = true;
 
     await _startUdpListener();
-    // mDNS multicast requires special entitlements on iOS and is unsupported
-    // on Android; only run on desktop (macOS/Windows/Linux).
-    if (Platform.isMacOS || Platform.isWindows || Platform.isLinux) {
+    // iOS/macOS/Windows/Linux 使用 mDNS 扫描；Android 继续走 UDP 广播兜底。
+    // iOS 上 mDNS 查询也是触发本地网络权限弹窗的关键路径。
+    if (Platform.isIOS ||
+        Platform.isMacOS ||
+        Platform.isWindows ||
+        Platform.isLinux) {
       await _startMdnsDiscovery();
     }
   }

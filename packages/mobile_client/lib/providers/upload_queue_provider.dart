@@ -49,6 +49,7 @@ class UploadQueueProvider extends ChangeNotifier {
     required String baseUrl,
     required String deviceId,
     required Future<String> Function(UploadTask) resolveFilePath,
+    Future<List<int>?> Function(UploadTask task)? resolveThumbnailBytes,
   }) async {
     // Dispose any previous manager.
     await _disposeManager();
@@ -66,6 +67,7 @@ class UploadQueueProvider extends ChangeNotifier {
       baseUrl: baseUrl,
       deviceId: deviceId,
       resolveFilePath: resolveFilePath,
+      resolveThumbnailBytes: resolveThumbnailBytes,
     );
 
     _sub = _manager!.stateStream.listen(_onState);
@@ -90,6 +92,7 @@ class UploadQueueProvider extends ChangeNotifier {
     required String baseUrl,
     required String deviceId,
     required Future<String> Function(UploadTask) resolveFilePath,
+    Future<List<int>?> Function(UploadTask task)? resolveThumbnailBytes,
   }) async {
     // 注册 resolver（在 dispose 之前）
     for (final t in tasks) {
@@ -120,6 +123,7 @@ class UploadQueueProvider extends ChangeNotifier {
           final fn = _resolverMap[task.fileName];
           return fn != null ? fn(task) : Future.value('');
         },
+        resolveThumbnailBytes: resolveThumbnailBytes,
       );
       _sub = _manager!.stateStream.listen(_onState);
       await _bgService.begin();

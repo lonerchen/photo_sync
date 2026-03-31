@@ -141,12 +141,14 @@ class UploadCompleteRequest {
   final String fileName;
   final String albumName;
   final int totalSize;
+  final String? thumbnailBase64;
 
   const UploadCompleteRequest({
     required this.deviceId,
     required this.fileName,
     required this.albumName,
     required this.totalSize,
+    this.thumbnailBase64,
   });
 
   factory UploadCompleteRequest.fromJson(Map<String, dynamic> json) =>
@@ -155,6 +157,7 @@ class UploadCompleteRequest {
         fileName: json['file_name'] as String,
         albumName: json['album_name'] as String,
         totalSize: json['total_size'] as int,
+        thumbnailBase64: json['thumbnail_base64'] as String?,
       );
 
   Map<String, dynamic> toJson() => {
@@ -162,6 +165,7 @@ class UploadCompleteRequest {
         'file_name': fileName,
         'album_name': albumName,
         'total_size': totalSize,
+        if (thumbnailBase64 != null) 'thumbnail_base64': thumbnailBase64,
       };
 }
 

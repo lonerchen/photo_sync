@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import '../models/media_item.dart';
 import '../models/upload_task.dart';
 import '../protocol/api_dtos.dart';
 
@@ -21,6 +22,7 @@ class UploadWorker {
   final String filePath;
   final UploadTask task;
   final ProgressCallback? onProgress;
+  final Future<List<int>?> Function(UploadTask task)? resolveThumbnailBytes;
   final http.Client _client;
 
   bool _paused = false;
@@ -32,6 +34,7 @@ class UploadWorker {
     required this.filePath,
     required this.task,
     this.onProgress,
+    this.resolveThumbnailBytes,
     http.Client? client,
   }) : _client = client ?? http.Client() {
     // 每个 worker 独立 client，避免共享连接导致串行排队
@@ -106,12 +109,22 @@ class UploadWorker {
     }
 
     debugPrint('[Worker] all chunks done, calling complete for ${task.fileName}');
+    String? thumbnailBase64;
+    final isLiveHeic = task.mediaType == MediaType.livePhoto &&
+        task.fileName.toLowerCase().endsWith('.heic');
+    if (isLiveHeic && resolveThumbnailBytes != null) {
+      final thumbBytes = await resolveThumbnailBytes!(task);
+      if (thumbBytes != null && thumbBytes.isNotEmpty) {
+        thumbnailBase64 = base64Encode(thumbBytes);
+      }
+    }
     // Step 3: complete
     final completeReq = UploadCompleteRequest(
       deviceId: deviceId,
       fileName: task.fileName,
       albumName: task.albumName,
       totalSize: totalSize,
+      thumbnailBase64: thumbnailBase64,
     );
     await _retryRequest(() => _postComplete(completeReq));
 

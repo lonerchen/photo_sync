@@ -43,6 +43,7 @@ class UploadQueueManager {
 
   /// Returns the local file path for a given [UploadTask].
   final Future<String> Function(UploadTask task) resolveFilePath;
+  final Future<List<int>?> Function(UploadTask task)? resolveThumbnailBytes;
 
   final http.Client _client;
 
@@ -67,6 +68,7 @@ class UploadQueueManager {
     required this.baseUrl,
     required this.deviceId,
     required this.resolveFilePath,
+    this.resolveThumbnailBytes,
     http.Client? client,
   }) : _client = client ?? http.Client();
 
@@ -142,6 +144,7 @@ class UploadQueueManager {
       filePath: '',
       task: task,
       onProgress: (_a, _b) {},
+      resolveThumbnailBytes: resolveThumbnailBytes,
     );
     debugPrint('[Queue] resolving filePath for ${task.fileName}');
     final filePath = await resolveFilePath(task);
@@ -151,6 +154,7 @@ class UploadQueueManager {
       deviceId: deviceId,
       filePath: filePath,
       task: task,
+      resolveThumbnailBytes: resolveThumbnailBytes,
       onProgress: (uploaded, total) {
         final delta = uploaded - _lastReported;
         if (delta > 0) {
