@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:common/common.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:photo_view/photo_view.dart';
@@ -64,10 +66,13 @@ class _MediaViewerState extends State<MediaViewer> {
 
   bool _downloading = false;
 
+  bool get _useExternalPlayerOnDesktop =>
+      !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+
   @override
   void initState() {
     super.initState();
-    if (widget.item.mediaType == MediaType.video) {
+    if (widget.item.mediaType == MediaType.video && !_useExternalPlayerOnDesktop) {
       final controller =
           VideoPlayerController.networkUrl(Uri.parse(widget._originalUrl));
       _videoController = controller;
@@ -108,6 +113,10 @@ class _MediaViewerState extends State<MediaViewer> {
   // ── Video ──────────────────────────────────────────────────────────────────
 
   Widget _buildVideoPlayer() {
+    if (_useExternalPlayerOnDesktop) {
+      return _buildExternalVideoPlaceholder(widget._originalUrl);
+    }
+
     final controller = _videoController;
     if (controller == null) {
       return const Center(
@@ -189,6 +198,36 @@ class _MediaViewerState extends State<MediaViewer> {
     return Container(
       color: Colors.black87,
       child: _buildVideoSurface(controller, progressBottomPadding: 88),
+    );
+  }
+
+  Widget _buildExternalVideoPlaceholder(String url) {
+    return GestureDetector(
+      onTap: () => _openInSystemPlayer(url),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          CachedNetworkImage(
+            imageUrl: widget._thumbnailUrl,
+            fit: BoxFit.contain,
+            errorWidget: (_, __, ___) => const ColoredBox(color: Colors.black),
+          ),
+          Container(color: Colors.black54),
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.open_in_new, color: Colors.white, size: 64),
+                SizedBox(height: 12),
+                Text(
+                  '点击使用系统播放器打开',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -297,7 +336,9 @@ class _MediaViewerState extends State<MediaViewer> {
                     _showLiveVideoPreview ? Icons.pause_circle : Icons.play_circle,
                     color: Colors.white,
                   ),
-                  tooltip: _showLiveVideoPreview ? '停止实况预览' : '播放实况预览',
+                  tooltip: _useExternalPlayerOnDesktop
+                      ? '用系统播放器打开实况视频'
+                      : (_showLiveVideoPreview ? '停止实况预览' : '播放实况预览'),
                   onPressed: _toggleLivePreview,
                 ),
               _actionButton(
@@ -352,6 +393,21 @@ class _MediaViewerState extends State<MediaViewer> {
   }
 
   Future<void> _toggleLivePreview() async {
+    if (_useExternalPlayerOnDesktop) {
+      try {
+        final pair = await _fetchLivePhotoPair(widget.item.id);
+        if (pair == null) throw Exception('Live pair not found');
+        final url = '${widget.serverBaseUrl}/api/v1/media/${pair.id}/original';
+        await _openInSystemPlayer(url);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('实况视频打开失败')),
+        );
+      }
+      return;
+    }
+
     if (!_showLiveVideoPreview) {
       setState(() {
         _showLiveVideoPreview = true;
@@ -406,6 +462,22 @@ class _MediaViewerState extends State<MediaViewer> {
     final data = json['data'];
     if (data is! Map<String, dynamic>) return null;
     return MediaItem.fromJson(data);
+  }
+
+  Future<void> _openInSystemPlayer(String url) async {
+    if (kIsWeb) return;
+    if (Platform.isWindows) {
+      await Process.run('cmd', ['/c', 'start', '', url]);
+      return;
+    }
+    if (Platform.isMacOS) {
+      await Process.run('open', [url]);
+      return;
+    }
+    if (Platform.isLinux) {
+      await Process.run('xdg-open', [url]);
+      return;
+    }
   }
 
   Widget _buildBottomOverlay() {
