@@ -112,3 +112,12 @@ melos clean
 - **photo_manager_ui**：`ThumbnailCell`、`MediaGridView`、`MediaViewer`、`AlbumListView`、`UploadProgressBar`、`CleanupConfirmDialog`、`ConnectionStatusBadge`、`DateRangePicker`、`AppTheme`
 - **mobile_client**：相册读取（`photo_manager`）、设备发现（mDNS + UDP）、WebSocket 连接、上传、清理、还原
 - **storage_server**：HTTP + WebSocket 服务器（shelf）、SQLite 数据库（sqflite_ffi）、缩略图生成队列（Isolate）、mDNS 广播、桌面 UI
+
+## 许可证
+
+本项目采用**非商用许可**（`LICENSE`）。
+
+- 允许：个人学习、研究、非商业用途的修改与分发
+- 禁止：任何形式的商业使用（含售卖、付费服务、商业集成、直接或间接营收用途）
+
+请在使用前阅读根目录 [LICENSE](/Users/jianwen/Desktop/photo_sync_kiro/photo_storage_cleaner/LICENSE) 全文。
